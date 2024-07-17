@@ -7,8 +7,6 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 import time
-# from record_audio import AudioRecorder
-# from speech_to_text import SpeechToText
 import os
 import tempfile
 
@@ -54,12 +52,6 @@ class JoinGoogleMeet:
         self.driver.implicitly_wait(100)
         print("Gmail login activity: Done")
         
-        # if os fingerprint setted
-        # self.drive.find_element(By.XPATH,
-        #     ''
-        #                         )
-
- 
  
     def turnOffMicCam(self, meet_link):
         # Navigate to Google Meet URL (replace with your meeting URL)

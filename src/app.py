@@ -3,24 +3,29 @@ from typing import Union
 from fastapi import FastAPI, WebSocket
 from fastapi.responses import HTMLResponse
 
-from meeting.gmeet import Gmeet 
-from template import templatehtml
+from src.template import templatehtml
 
 # Generate a random UUID
-generated_uuid = uuid.uuid4()
-
-# Create room
-m_gmeet = Gmeet(generated_uuid)
+# generated_uuid = uuid.uuid4()
 
 app = FastAPI()
 
 @app.get("/")
-def read_root():
+async def read_root():
     return {"Hello": "World"}
 
-@app.get("/video")
+@app.get("/call/gmeet")
 async def read_root():
-    return HTMLResponse(templatehtml)
+    return HTMLResponse("Hello, This is bot to login gmeet")
+
+@app.get("/call/teams")
+async def read_root():
+    return HTMLResponse("Hello, This is bot to login teams")
+
+@app.get("/call/zoom")
+async def read_root():
+    return HTMLResponse("Hello, This is bot to login zoom")
+
 
 @app.websocket("/ws/text")
 async def text_endpoint(websocket: WebSocket):
@@ -39,4 +44,4 @@ async def text_endpoint(websocket: WebSocket):
 @app.websocket("/ws/video")
 async def video_endpoint(websocket: WebSocket):
     await websocket.accept()
-    await m_gmeet.captureStream(websocket)
+    # await m_gmeet.captureStream(websocket)
