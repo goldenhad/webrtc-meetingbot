@@ -1,7 +1,14 @@
 ## [Meeting Recording Bot Server]
 <br />
 
+The bot is working for Google Meeting, Microsoft Teams, Zooms
 > Product Roadmap & `Features`:
 
-# Show all audio device names
-ffmpeg -list_devices true -f dshow -i dummy
+# Technologies
+> Python
+> Automation
+> Selenium
+> WebRTC
+> WebSocket
+
+# Technologies

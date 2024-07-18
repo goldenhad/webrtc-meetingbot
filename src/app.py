@@ -27,7 +27,7 @@ async def run_gmeet(meet_link,websocket_url):
 
 
 async def run_teams(meet_link,websocket_url):
-    obj = JoinGoogleMeet()x
+    obj = JoinGoogleMeet()
     
     # Notify the WebSocket once processing is complete
     await notify_websocket(websocket_url, {"type":"control","message": "Started Teams Meeting Record", "data": ""})
