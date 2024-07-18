@@ -1,5 +1,9 @@
 import os
 
+from dotenv import load_dotenv
+
+load_dotenv() 
+
 # Load from env
 BOT_NAME = os.environ["BOT_NAME"]
 OUTLOOK = os.environ["OUTLOOK"]
