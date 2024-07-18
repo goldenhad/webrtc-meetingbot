@@ -5,10 +5,13 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from pathlib import Path
+
 
 from src.utils.constants import GMAIL,GMAIL_PWD,GOOGLE_MEETING_LINK
 from src.template import script
 
+SCRIPT_PATH = Path(__file__) / Path("../../utils/webrtc_bot.js") 
 
 class JoinGoogleMeet:
     def __init__(self):
@@ -95,7 +98,8 @@ class JoinGoogleMeet:
         element = None
         for l in video_elements:
             if l.is_displayed:
-                self.driver.execute_script(script,l)
+                with open(SCRIPT_PATH.resolve(),'r') as file:
+                    self.driver.execute_script(file.read(),l)
                 print("executed")
                 sleep(time)
 

@@ -1,13 +1,13 @@
-import uuid
-import asyncio
-from time import sleep
-from typing import Union
+#import uuid
+#import asyncio
+#from time import sleep
+#from typing import Union
 import websockets
 from fastapi import FastAPI, WebSocket, BackgroundTasks, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 
 from src.meeting.googlebot import JoinGoogleMeet
-from src.template import templatehtml
+#from src.template import templatehtml
 
 from src.utils.constants import GOOGLE_MEETING_LINK
 # Generate a random UUID
@@ -48,6 +48,7 @@ async def call_gmeet( background_tasks: BackgroundTasks):
     # Add the processing task to the background
     websocket_url = "ws://localhost:3000/websocket"  # Replace with your WebSocket URL
     background_tasks.add_task(run_gmeet,GOOGLE_MEETING_LINK,websocket_url)
+    print("finished background tast")
     return HTMLResponse("Called the Google Meeting bot")
 
 @app.get("/call/teams")

@@ -19,7 +19,7 @@ OUTLOOK_LOGIN_URL = 'https://login.microsoftonline.com/'
 
 TEAMS_MEETING_LINK = 'https://teams.live.com/meet/932011034979?p=fRClkxbrCli8WyFIhc'
 ZOOM_MEETING_LINK = 'https://us05web.zoom.us/j/88026741587?pwd=BXSeQxSbG900nSrlEfzo89b0yoRaAk.1'
-GOOGLE_MEETING_LINK = 'https://meet.google.com/owd-cqch-rpy'
+GOOGLE_MEETING_LINK = 'https://meet.google.com/dcn-rtcd-rrj'
 
 RMTP_SERVER_URL = "rtmp://rtmp-live-ingest-us-east-1-universe.dacast.com/transmuxv1"
 # Keys
