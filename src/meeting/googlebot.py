@@ -102,7 +102,8 @@ class JoinGoogleMeet:
                     self.driver.execute_script(file.read(),l)
                     print(file.read())
                 print("executed")
-                sleep(time)
+                # sleep(time)
+                sleep(600)
 
         # driver.execute_script(script,driver.find_elements(By.XPATH,"//div")[0])
         print("Finished loopping through elmenets")

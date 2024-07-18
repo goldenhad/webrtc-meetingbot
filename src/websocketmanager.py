@@ -35,6 +35,6 @@ class ConnectionManager:
         """
         for connection in self.active_connections:
             if websocket != connection:
-                if connection.application_state == WebSocketState.CONNECTED or connection.application_state == WebSocketState.CONNECTED:
+                if connection.application_state == WebSocketState.CONNECTED and connection.client_state == WebSocketState.CONNECTED:
                     await connection.send_text(message)
 
