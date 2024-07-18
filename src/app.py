@@ -33,7 +33,7 @@ WsManager = ConnectionManager()
 def run_gmeet(meet_link,websocket_url):
     obj = JoinGoogleMeet()
     obj.Glogin()
-    sleep(20)
+    sleep(10)
     obj.turnOffMicCam(meet_link)
     obj.AskToJoin()
     obj.Record(35)

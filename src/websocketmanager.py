@@ -33,11 +33,8 @@ class ConnectionManager:
         """
         Broadcasts message to all websockets except one websocket
         """
-        print("send message to broadcast")
-        print(message)
         for connection in self.active_connections:
             if websocket != connection:
                 if connection.application_state == WebSocketState.CONNECTED or connection.application_state == WebSocketState.CONNECTED:
-                    print('send to conenction')
                     await connection.send_text(message)
 
