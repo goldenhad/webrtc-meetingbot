@@ -1,3 +1,12 @@
+import os
+
+# Load from env
+BOT_NAME = os.environ["BOT_NAME"]
+OUTLOOK = os.environ["OUTLOOK"]
+OUTLOOK_PWD = os.environ["OUTLOOK_PWD"]
+GMAIL = os.environ["GMAIL"]
+GMAIL_PWD = os.environ["GMAIL_PWD"]
+
 # Reference URLs
 TEAMS_URL = 'https://teams.microsoft.com/_#/calendarv2'
 ZOOMS_URL = 'https://zoom.us/'

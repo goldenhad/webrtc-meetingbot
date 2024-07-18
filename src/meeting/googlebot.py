@@ -1,4 +1,3 @@
-# import required modules
 from time import sleep
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -6,18 +5,15 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
-import time
-import os
-import tempfile
 
+from src.utils.constants import GMAIL,GMAIL_PWD,GOOGLE_MEETING_LINK
+from src.template import script
 
 
 class JoinGoogleMeet:
     def __init__(self):
-        # self.mail_address = os.environ.get('email_id')
-        # self.password = os.environ.get('email_password')
-        self.mail_address = "jaredbohan63@gmail.com"
-        self.password = "twinstar0311"
+        self.mail_address = GMAIL
+        self.password = GMAIL_PWD
         # create chrome instance
         opt = Options()
         opt.add_argument('--disable-blink-features=AutomationControlled')
@@ -29,7 +25,6 @@ class JoinGoogleMeet:
             "profile.default_content_setting_values.notifications": 1
         })
         self.driver = webdriver.Chrome(options=opt)
-
 
     def Glogin(self):
         # Login Page
@@ -56,14 +51,14 @@ class JoinGoogleMeet:
     def turnOffMicCam(self, meet_link):
         # Navigate to Google Meet URL (replace with your meeting URL)
         self.driver.get(meet_link)
+        self.driver.implicitly_wait(20)
         # turn off Microphone
-        time.sleep(3)
         self.driver.find_element(By.CSS_SELECTOR, 'div[jscontroller="t2mBxb"][data-anchor-id="hw0c9"]').click()
         self.driver.implicitly_wait(3000)
         print("Turn off mic activity: Done")
     
         # turn off camera
-        time.sleep(1)
+        sleep(1)
         self.driver.find_element(By.CSS_SELECTOR, 'div[jscontroller="bwqwSd"][data-anchor-id="psRWwc"]').click()
         self.driver.implicitly_wait(3000)
         print("Turn off camera activity: Done")
@@ -71,40 +66,55 @@ class JoinGoogleMeet:
  
     def checkIfJoined(self):
         try:
+            print("Check if join try")
+
             # Wait for the join button to appear
-            join_button = WebDriverWait(self.driver, 60).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, 'div.uArJ5e.UQuaGc.Y5sE8d.uyXBBb.xKiqt'))
+            spotlighted= WebDriverWait(self.driver, 10).until(
+                EC.presence_of_element_located((By.TAG_NAME, 'video'))
             )
+            print(spotlighted)
+
             print("Meeting has been joined")
         except (TimeoutException, NoSuchElementException):
             print("Meeting has not been joined")
 
     
-    def AskToJoin(self, audio_path, duration):
+    def AskToJoin(self):
         # Ask to Join meet
-        time.sleep(5)
         self.driver.implicitly_wait(2000)
         self.driver.find_element(By.CSS_SELECTOR, 'button[jsname="Qx7uuf"]').click()
         print("Ask to join activity: Done")
         self.checkIfJoined()
         # Ask to join and join now buttons have same xpaths
-        # AudioRecorder().get_audio(audio_path, duration)
 
- 
+    def Record(self,time):
+        print("Record Start")
+        video_elements = self.driver.find_elements(By.XPATH,"//video")
+        print("Record Start")
 
+        element = None
+        for l in video_elements:
+            if l.is_displayed:
+                self.driver.execute_script(script,l)
+                print("executed")
+                sleep(time)
+
+        # driver.execute_script(script,driver.find_elements(By.XPATH,"//div")[0])
+        print("Finished loopping through elmenets")
 
 def main():
-    temp_dir = tempfile.mkdtemp()
-    audio_path = os.path.join(temp_dir, "output.wav")
+    # temp_dir = tempfile.mkdtemp()
+    audio_path = "output.wav"
     # Duration for bot to record audio
-    meet_link = 'https://meet.google.com/owd-cqch-rpy'
+    meet_link = GOOGLE_MEETING_LINK
     duration = 60
     obj = JoinGoogleMeet()
     obj.Glogin()
     obj.turnOffMicCam(meet_link)
     obj.AskToJoin(audio_path, duration)
-    # SpeechToText().transcribe(audio_path)
-
+    obj.Record(35)
+    
+    sleep(600)
 
 #call the main function
 if __name__ == "__main__":
