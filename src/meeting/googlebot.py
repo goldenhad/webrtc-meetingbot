@@ -11,7 +11,7 @@ from pathlib import Path
 from src.utils.constants import GMAIL,GMAIL_PWD,GOOGLE_MEETING_LINK
 from src.template import script
 
-SCRIPT_PATH = Path(__file__) / Path("../../utils/webrtc_bot.js") 
+SCRIPT_PATH = Path(__file__) / Path("../../utils/webrtc_bot_script.js") 
 
 class JoinGoogleMeet:
     def __init__(self):
@@ -100,6 +100,7 @@ class JoinGoogleMeet:
             if l.is_displayed:
                 with open(SCRIPT_PATH.resolve(),'r') as file:
                     self.driver.execute_script(file.read(),l)
+                    print(file.read())
                 print("executed")
                 sleep(time)
 

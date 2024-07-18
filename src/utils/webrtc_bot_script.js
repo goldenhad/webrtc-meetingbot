@@ -41,13 +41,24 @@ const configuration = {iceServers: [
   },
 ],};
 
+const waitForSocketOpen = (socket) => {
+  return new Promise((resolve, reject) => {
+    if (socket.readyState === WebSocket.OPEN) {
+      resolve();
+    } else {
+      socket.addEventListener('open', resolve, { once: true });
+      socket.addEventListener('error', reject, { once: true });
+    }
+  });
+};
+
 const pc = new RTCPeerConnection(configuration);
 let makingoffer = false;
 let ignoreoffer = false;
 let issettingremoteanswerpending = false;
 
 // send any ice candidates to the other peer
-pc.onicecandidate = ({candidate}) =>  socket.send(JSON.stringify({ type: 'candidate', room: 'room1',from:"react", candidate: candidate }))
+pc.onicecandidate = ({candidate}) =>  socket.send(JSON.stringify({ type: 'candidate', room: 'room1',from:"bot", candidate: candidate }))
 //       
 // let the "negotiationneeded" event trigger offer generation
 pc.onnegotiationneeded = async () => {
@@ -56,7 +67,8 @@ pc.onnegotiationneeded = async () => {
     makingoffer = true;
     await pc.setLocalDescription();
     console.log("making offer")
-    socket.send(JSON.stringify({ type: pc.localDescription.type, room: 'room1',from:"react", description: pc.localDescription }));
+    await waitForSocketOpen(socket)
+    socket.send(JSON.stringify({ type: pc.localDescription.type, room: 'room1',from:"bot", description: pc.localDescription }));
   } catch (err) {
     console.error(err);
   } finally {
@@ -86,7 +98,7 @@ socket.onmessage = async ({data}) => {
       issettingremoteanswerpending = false;
       if (description.type == "offer") {
         await pc.setLocalDescription();
-        socket.send(JSON.stringify({ type: pc.localDescription.type, room: 'room1',from:"react", description: pc.localDescription }));
+        socket.send(JSON.stringify({ type: pc.localDescription.type, room: 'room1',from:"bot", description: pc.localDescription }));
       }
     } else if (candidate) {
       try {
