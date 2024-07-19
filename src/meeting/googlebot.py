@@ -92,22 +92,26 @@ class JoinGoogleMeet:
 
     def Record(self,time):
         print("Record Start")
-        video_elements = self.driver.find_elements(By.XPATH,"//video")
-        print("Record Start")
-
         sleep(10)
-        element = None
-        for l in video_elements:
-            if l.is_displayed:
-                with open(SCRIPT_PATH.resolve(),'r') as file:
-                    self.driver.execute_script(file.read(),l)
-                    print(file.read())
-                print("executed")
-                # sleep(time)
-                sleep(600)
 
-        # driver.execute_script(script,driver.find_elements(By.XPATH,"//div")[0])
-        print("Finished loopping through elmenets")
+
+        try:
+            spotlighted_video_elements = WebDriverWait(self.driver,60).until(
+
+                #xpath for a video element whose ancestor which has an attribute of data-participant-id which has a span with aria-label="Pinned for everyone"
+                EC.presence_of_all_elements_located((By.XPATH,'//ancestor::div[@data-participant-id]//span[@aria-label="Pinned for everyone"]/preceding::video[1]'))
+
+            )
+
+            with open(SCRIPT_PATH.resolve(),'r') as file:
+                #only the first spotlighted element is going to be shown
+                self.driver.execute_script(file.read(),spotlighted_video_elements[0])
+                sleep(600)
+            print("fini")
+        except TimeoutException:
+            #TODO: add support to send the socket error
+            pass
+            
 
 def main():
     # temp_dir = tempfile.mkdtemp()
