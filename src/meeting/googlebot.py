@@ -95,6 +95,7 @@ class JoinGoogleMeet:
         video_elements = self.driver.find_elements(By.XPATH,"//video")
         print("Record Start")
 
+        sleep(10)
         element = None
         for l in video_elements:
             if l.is_displayed:

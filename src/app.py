@@ -85,7 +85,7 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             data = await websocket.receive_text()
             data_json = json.loads(data)
-            if data_json["type"] == "join":
+            if hasattr(data,'type')  and data_json["type"] == "join":
                 await WsManager.broadcast(json.dumps(data_json))
             else:
                 await WsManager.broadcast_except(websocket,json.dumps(data_json))
