@@ -1,99 +1,66 @@
-#import uuid
 from multiprocessing import Process
-import json
-#import asyncio
-#from time import sleep
-#from typing import Union
 from time import sleep
-from typing import List, Dict
-import websockets
-from fastapi import FastAPI, WebSocket, BackgroundTasks, WebSocketDisconnect
+
+from fastapi import FastAPI 
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.meeting.googlebot import JoinGoogleMeet
-#from src.template import templatehtml
+from src.meeting.googlebot import GoogleMeet
+from src.meeting.teamsbot import TeamsMeet
+from src.types import CallMeeting
+from src.utils.constants import WEBSOCKET_URL
 
-from src.utils.constants import GOOGLE_MEETING_LINK
-from src.websocketmanager import ConnectionManager
-# Generate a random UUID
-# generated_uuid = uuid.uuid4()
 
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # can alter with time
+    allow_origins=["*"],  # Can alter with time
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-WsManager = ConnectionManager()
 
 
-def run_gmeet(meet_link,websocket_url):
-    obj = JoinGoogleMeet()
-    obj.Glogin()
-    sleep(10)
-    obj.turnOffMicCam(meet_link)
-    obj.AskToJoin()
-    obj.Record(35)
+
+def run_gmeet( websocket_url, meeting_link):
+    """Runs the Google Meet bot."""
+    obj = GoogleMeet(meeting_link,websocket_url)
+    obj.glogin()
+    sleep(5)
+    obj.join_meeting()
+    obj.record_and_stream(35)
     # Notify the WebSocket once processing is complete
-    # await notify_websocket(websocket_url, {"type":"control","message": "Started Google Meeting Record", "data": ""})
+    # await notify_websocket(websocket_url, {"type": "control", "message": "Started Google Meeting Record", "data": ""})
 
 
-async def run_teams(meet_link,websocket_url):
-    obj = JoinGoogleMeet()
-    
+def run_zoom(meet_link, websocket_url, meeting_link):
+    """Run the Zoom Meet bot."""
+
+
+def run_teams( websocket_url, meeting_link):
+    """Run the Teams Meet bot."""
+    obj = TeamsMeet(meeting_link,websocket_url)
+    obj.join_meeting()
+    obj.record_and_capture()
+
     # Notify the WebSocket once processing is complete
-    await notify_websocket(websocket_url, {"type":"control","message": "Started Teams Meeting Record", "data": ""})
-
-# Function to notify the WebSocket
-async def notify_websocket(websocket_url: str, data: dict):
-    async with websockets.connect(websocket_url) as websocket:
-        await websocket.send(str(data))
-        response = await websocket.recv()
-        print(f"Received response from websocket: {response}")
-
-@app.get("/")
-async def read_root():
-    return {"Hello": "World"}
+    # await notify_websocket(websocket_url, {"type": "control", "message": "Started Teams Meeting Record", "data": ""})
 
 @app.post("/call/gmeet")
-async def call_gmeet( background_tasks: BackgroundTasks):
-    # Add the processing task to the background
-    websocket_url = "ws://localhost:3000/websocket"  # Replace with your WebSocket URL
-    p = Process(target=run_gmeet,args=(GOOGLE_MEETING_LINK,websocket_url))
+async def call_gmeet(meeting: CallMeeting):
+    p = Process(target=run_gmeet, args=(WEBSOCKET_URL, meeting.meetingLink))
     p.start()
-    print("finished background tast")
     return HTMLResponse("Called the Google Meeting bot")
 
-@app.get("/call/teams")
-async def call_teams():
 
-    return HTMLResponse("Hello, This is bot to login teams")
-
-@app.get("/call/zoom")
-async def call_zoom():
-    return HTMLResponse("Hello, This is bot to login zoom")
+@app.post("/call/teams")
+async def call_teams(meeting: CallMeeting):
+    p = Process(target=run_teams, args=(WEBSOCKET_URL,meeting.meetingLink))
+    p.start()
+    return HTMLResponse("Hello, This is bot to login Teams")
 
 
-# WebSocket endpoint to handle incoming WebSocket connections
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await WsManager.connect(websocket)
-    try:
-        while True:
-            data = await websocket.receive_text()
-            data_json = json.loads(data)
-            if hasattr(data,'type')  and data_json["type"] == "join":
-                await WsManager.broadcast(json.dumps(data_json))
-            else:
-                await WsManager.broadcast_except(websocket,json.dumps(data_json))
-    except WebSocketDisconnect:
-        print("WebSocket connection closed")
+@app.post("/call/zoom")
+async def call_zoom(meeting: CallMeeting):
+    return HTMLResponse("Hello, This is bot to login Zoom")
 
-
-@app.websocket("/ws/video")
-async def video_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    # await m_gmeet.captureStream(websocket)

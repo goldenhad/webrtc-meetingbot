@@ -16,10 +16,11 @@ TEAMS_URL = 'https://teams.microsoft.com/_#/calendarv2'
 ZOOMS_URL = 'https://zoom.us/'
 GOOGLE_URL = 'https://accounts.google.com'
 OUTLOOK_LOGIN_URL = 'https://login.microsoftonline.com/'
+WEBSOCKET_URL = "http://localhost:7000"
 
 TEAMS_MEETING_LINK = 'https://teams.live.com/meet/932011034979?p=fRClkxbrCli8WyFIhc'
 ZOOM_MEETING_LINK = 'https://us05web.zoom.us/j/88026741587?pwd=BXSeQxSbG900nSrlEfzo89b0yoRaAk.1'
-GOOGLE_MEETING_LINK = 'https://meet.google.com/dht-gfma-hiu'
+GOOGLE_MEETING_LINK = 'https://meet.google.com/iez-ezsk-ikq'
 
 RMTP_SERVER_URL = "rtmp://rtmp-live-ingest-us-east-1-universe.dacast.com/transmuxv1"
 # Keys
@@ -30,5 +31,5 @@ INFO = 1
 ERROR = 0
 
 # File paths
-CHROME_DRIVER_PATH = r'chromedriver.exe'
-CONFIG_FILE_PATH = r'./config.json'
+# CHROME_DRIVER_PATH = r'chromedriver.exe'
+# CONFIG_FILE_PATH = r'./config.json'

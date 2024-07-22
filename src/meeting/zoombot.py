@@ -14,7 +14,7 @@ import tempfile
 
 class JoinZoomMeet:
     def __init__(self,meetinglink):
-        self.botname = "BotAssistanct"  
+        self.botname = "BotAssistant"  
         self.meetingLink = meetinglink
         # create chrome instance
         opt = Options()
