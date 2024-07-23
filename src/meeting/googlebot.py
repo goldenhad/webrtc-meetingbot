@@ -94,12 +94,9 @@ class GoogleMeet:
         try:
             sleep(10)
             self.driver.implicitly_wait(60)
-            spotlighted_video_elements = self.driver.find_elements(By.XPATH, '//ancestor::div[@data-participant-id]' + 
-                     '//span[@aria-label="Pinned for everyone"]/preceding::video[1]')
-
             with open(SCRIPT_PATH, 'r') as file:
                 # Only the first spotlighted element is going to be shown
-                self.driver.execute_script(file.read(), spotlighted_video_elements[0])
+                self.driver.execute_script(file.read())
                 sleep(duration)
             print("Finished recording")
         except (TimeoutException, NoSuchElementException):

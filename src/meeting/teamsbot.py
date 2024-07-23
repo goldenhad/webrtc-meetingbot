@@ -125,20 +125,8 @@ class TeamsMeet:
         """Creates WebRTC connection and start recording the spotlighted participant"""
         try:
             self.driver.implicitly_wait(60)
-            # video_element = WebDriverWait(self.driver, 100).until(
-            #     EC.presence_of_element_located((
-            #         By.XPATH,
-            #         "//*[@data-cid='stage-participant-spotlighted']/ancestor::div[@data-cid='calling-participant-stream']//div[@data-tid='video-stream']//video",
-            #     ))
-            # )
-            # video_elements = self.driver.find_elements(
-            #         By.XPATH,
-            #         "//*[@data-cid='stage-participant-spotlighted']/ancestor::div[@data-cid='calling-participant-stream']//div[@data-tid='video-stream']//video",
-            #     )
-            video_elements = self.driver.find_elements("//video")
-
             with open(SCRIPT_PATH.resolve(),'r') as script:
-                self.driver.execute_script(script.read(), video_elements[0])
+                self.driver.execute_script(script.read())
                 print("executed")
 
             sleep(600)

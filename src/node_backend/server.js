@@ -41,6 +41,7 @@ wss.on('connection', (ws) => {
 
       case 'transcription':
         console.log("transcription event recieved")
+        console.log(data)
         break;
       case 'extension-bot-error':
         console.log("extension-bot-error event recieved")
