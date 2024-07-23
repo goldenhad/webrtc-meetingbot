@@ -1,9 +1,9 @@
 
 (async () =>{
 
-  const socket = new WebSocket('ws://localhost:7000');
+  let socket = new WebSocket('ws://localhost:7000');
   //webrtc config
-  const configuration = {iceServers: [
+  let configuration = {iceServers: [
     {
       urls: "stun:stun.relay.metered.ca:80",
     },
@@ -30,7 +30,7 @@
   ],};
 
   //audio setup
-  const audioStream = document.querySelector("audio").srcObject.clone()
+  let audioStream = document.querySelector("audio").srcObject.clone()
   window.stream = new MediaStream()
   audioStream.getAudioTracks().forEach(track => {
     window.stream.addTrack(track)
@@ -57,7 +57,7 @@
   // https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API/Perfect_negotiation
 
   // sets pc to be global variable so that future ice candidates can access it. If another connection is made, this will break the initial connection though
-  const pc = new RTCPeerConnection(configuration);
+  let pc = new RTCPeerConnection(configuration);
 
   // send any ice candidates to the other peer
   pc.onicecandidate = ({candidate}) =>  socket.send(JSON.stringify({ event: 'candidate', room: 'room1',from:"bot", candidate: candidate }))
@@ -78,17 +78,17 @@
   };
 
   socket.onmessage = async ({data}) => {
-    const description = JSON.parse(data)?.description
-    const candidate = JSON.parse(data)?.candidate
+    let description = JSON.parse(data)?.description
+    let candidate = JSON.parse(data)?.candidate
     try {
       if (description) {
         // an offer may come in while we are busy processing srd(answer).
         // in this case, we will be in "stable" by the ime the offer is processed
         // so it is safe to chain it on our operations chain now.
-        const readyforoffer =
+        let readyforoffer =
           !makingoffer &&
           (pc.signalingstate == "stable" || issettingremoteanswerpending);
-        const offercollision = description.type == "offer" && !readyforoffer;
+        let offercollision = description.type == "offer" && !readyforoffer;
 
         ignoreoffer = !polite && offercollision;
         if (ignoreoffer) {
@@ -112,17 +112,22 @@
       console.error(err);
     }   //};
   }
-
-  // observer setup
-  const wrapper = document.querySelector('div[data-tid="modern-stage-wrapper"]')
-  const config = {subtree: true ,childList:true};
-  // Function to be executed when the grandchild element appears
-  function handleSpotlight() {
+  function switchStream(videoElement){
+    try {
+      window.recorder.stop()
+      pc.getSenders().forEach(sender =>{
+        if (sender.track == window.stream.getVideoTracks()[0]) { //only 1 video track is sent. That's how we're sure about this
+          pc.removeTrack(sender) 
+        }
+      })
+      window.stream.removeTrack(window.stream.getVideoTracks()[0])
+    } catch (e) {
+      console.dir(e)
+      console.error(e)
+    }
     try {
       console.log("spotlighted")
-      const videoNode = document.evaluate("//div[@data-tid='only-videos-wrapper' and (contains(@aria-label, 'pinned') or contains(@aria-label, 'spotlight'))]//video"
-        ,document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null).singleNodeValue
-      const vidStream = videoNode.srcObject.clone()
+      let vidStream = videoElement.srcObject.clone()
 
       vidStream.getVideoTracks().forEach(track => {
         window.stream.addTrack(track)
@@ -130,7 +135,7 @@
 
 
       window.stream.getTracks().forEach(track => {
-        const tracks = []
+        let tracks = []
         pc.getSenders().forEach(element => {
           tracks.push(element.track) 
         });
@@ -148,7 +153,7 @@
       window.recorder.onstop = (e) =>{
         console.log("chunks rec stop",window.chunks)
         console.log("recording stopped")
-        const blob = new Blob(window.chunks,{type:'video/mp4'})
+        let blob = new Blob(window.chunks,{type:'video/mp4'})
         var a = document.createElement("a")
         document.body.appendChild(a)
         var url = window.URL.createObjectURL(blob)
@@ -168,56 +173,69 @@
       console.warn("handleSpotlightError: ",e)  
     }
 
+
+
   }
-  function handleUnspotlight() {
-    try {
-      console.log("unspotlighted")
-      window.recorder.stop()
-      pc.getSenders().forEach(sender =>{
-        if (sender.track == window.stream.getVideoTracks()[0]) { //only 1 video track is sent. That's how we're sure about this
-          pc.removeTrack(sender) 
-          console.log("track removed")
-        }
-      })
-      window.stream.removeTrack(window.stream.getVideoTracks()[0])
-    } catch (e) {
-      console.dir(e)
-      console.error(e)
+  let switchTimer;
+  const delayedSwitch = () =>{
+    if (switchTimer != null && switchTimer != undefined) {
+      clearTimeout(switchTimer)
+      
     }
-    // Your code here for when the element is removed
+    switchTimer = setTimeout(() => {
+      let videoElement = document.querySelector("div[data-cid='calling-participant-stream'] video")
+      console.dir(videoElement)
+      if (videoElement) {
+        switchStream(videoElement)
+      }
+    }, 1000);
   }
 
-  // Callback function to handle mutations
-  const mutationCallback = (mutationsList ) => {
+  let observerCallback = (mutationsList ) => {
     for (let mutation of mutationsList) {
       if (mutation.type === 'childList') {
+
         for (let addedNode of mutation.addedNodes) {
           if (addedNode.nodeType === Node.ELEMENT_NODE) {
-            // Check if the grandchild element with data-cid='stage-participant-spotlighted' exists
-            const spottedElement = addedNode.querySelector("[data-cid='stage-participant-spotlighted']");
-            if (spottedElement) {
-              handleSpotlight();
+            if (addedNode.querySelector('[data-cid="stage-participant-pinned"]')) {
+              console.log("added pinned participant") 
+              delayedSwitch()
+            }
+            if (addedNode.matches('[data-cid="calling-participant-stream"]' )) { // Is the added node, the node we want to be seen?
+
+              console.log("added calling participant stream") 
+              delayedSwitch()
+              // waiting 0.5s till video element becomes available
+
+
             }
           }
         } // Check removed nodes
-        for (let removedNode of mutation.removedNodes) {
+        for (let removedNode of mutation.removedNodes){
           if (removedNode.nodeType === Node.ELEMENT_NODE) {
-            // Check if the removed element or any of its descendants has data-cid='stage-participant-spotlighted'
-            if (removedNode.matches("[data-cid='stage-participant-spotlighted']")) {
-              handleUnspotlight();
+            if (removedNode.matches('[data-cid="stage-participant-pinned"]') 
+              || removedNode.matches('[data-cid="calling-participant-stream"]'
+              || removedNode.matches('[data-tid=""]')
+              )) {
+              console.log("removed pinned participant / stage") 
+              delayedSwitch()
             }
           }
         }
+        //
       }
     }
-  };
+  }
 
+  // observer setup
+  let wrapper = document.querySelector('div[data-testid="stage-segment-wrapper"]')
+  let config = {subtree: true ,childList:true, attributes:true,attributeFilter:["data-acc-id"]};
 
-  const observer = new MutationObserver(mutationCallback)
+  let observer = new MutationObserver(observerCallback)
   console.log("Set observer")
 
   observer.observe(wrapper,config)
   window.observer = observer
   window.socket = socket;
 
-})
+})()
