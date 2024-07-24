@@ -41,22 +41,26 @@ wss.on('connection', (ws) => {
 
       case 'transcription':
         console.log("transcription event recieved")
-        console.log(data)
+        console.log(data.data)
         break;
       case 'extension-bot-error':
         console.log("extension-bot-error event recieved")
         break;
       case 'analysing':
         console.log("analysing event recieved")
+        console.log(data.data)
         break;
       case 'participant':
         console.log("participant event recieved")
+        console.log(data.data)
         break;
       case 'subject':
         console.log("subject event recieved")
+        console.log(data.data)
         break;
       case 'processed':
         console.log("processed event recieved")
+        console.log(data.data)
         break;
 
     }

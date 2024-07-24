@@ -1,8 +1,10 @@
+// Contains code required for tracking pinned and currently speaking users, connecting to nodejs server
+// via websocket
 
-(async () =>{
+(() =>{
 
-  const socket = new window.WebsocketConnection('ws://localhost:7000')
-  //const socket = new WebSocket('ws://localhost:7000');
+  //const socket = new window.WebsocketConnection('ws://localhost:7000')
+  const socket = new WebSocket('ws://localhost:7000');
   //webrtc config
   const configuration = {iceServers: [
     {
@@ -115,74 +117,12 @@
   }
 
   // observer setup
-  const config = {subtree: true ,childList:true};
-  // Function to be executed when the grandchild element appears
-  function handleSpotlight() {
-    console.log("spotlighted")
+  function switchStream(videoElement){
     try {
-      setTimeout(()=>{
-
-        const videoNode = document.evaluate('//ancestor::div[@data-participant-id]' + 
-          '//span[@aria-label="Pinned for everyone"]/preceding::video[1]'
-          ,document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null).singleNodeValue
-        const vidStream = videoNode.srcObject.clone()
-
-        vidStream.getVideoTracks().forEach(track => {
-          window.stream.addTrack(track)
-        });
-
-
-        window.stream.getTracks().forEach(track => {
-          const tracks = []
-          pc.getSenders().forEach(element => {
-            tracks.push(element.track) 
-          });
-
-          if (!tracks.includes(track)) {
-            console.log("added track")
-            pc.addTrack(track, window.stream)
-          }
-        });
-        console.log("Finished adding tracks to pc")
-
-        //recorder setup
-        let recorder = new MediaRecorder(window.stream,{mimeType:"video/mp4"})
-        console.log('created mediarecorder')
-        window.recorder = recorder
-        window.recorder.onstop = (e) =>{
-          console.log("chunks rec stop",window.chunks)
-          console.log("recording stopped")
-          const blob = new Blob(window.chunks,{type:'video/mp4'})
-          var a = document.createElement("a")
-          document.body.appendChild(a)
-          var url = window.URL.createObjectURL(blob)
-          a.href = url
-          a.download = 'recording.mp4'
-          a.click()
-          window.URL.revokeObjectURL(url)
-          window.chunks = []
-        }
-        window.recorder.ondataavailable = (event) => {
-          window.chunks.push(event.data)
-        };
-        window.recorder.start(1000);
-        console.log("Recording started")
-      },1000);
-      
-
-    } catch (e) {
-      console.warn("handleSpotlightError: ",e)  
-    }
-
-  }
-  function handleUnspotlight() {
-    try {
-      console.log("unspotlighted")
       window.recorder.stop()
       pc.getSenders().forEach(sender =>{
         if (sender.track == window.stream.getVideoTracks()[0]) { //only 1 video track is sent. That's how we're sure about this
           pc.removeTrack(sender) 
-          console.log("track removed")
         }
       })
       window.stream.removeTrack(window.stream.getVideoTracks()[0])
@@ -190,61 +130,102 @@
       console.dir(e)
       console.error(e)
     }
-    // Your code here for when the element is removed
-  }
+    try {
+      console.log("spotlighted")
+      let vidStream = videoElement.srcObject.clone()
 
-  let spotlightTimer; // required to smooth out the repeated firing of events. 
-  let unspotlightTimer;
-  let timeBetweenSpotlightEventChange = 500; // add and remove tends to fire simultaneously when adding.
-  let spotlightTime;
+      vidStream.getVideoTracks().forEach(track => {
+        window.stream.addTrack(track)
+      });
 
-  // Callback function to handle mutations
-  const mutationCallback = (mutationsList ) => {
-    for (let mutation of mutationsList) {
-      if (mutation.type === 'childList') {
-        for (let addedNode of mutation.addedNodes) {
-          if (addedNode.nodeType === Node.ELEMENT_NODE) {
-            // Check if the grandchild element with data-cid='stage-participant-spotlighted' exists
-            const spottedElement = addedNode.matches("img[src='https://www.gstatic.com/meet/custom_keep_white_8016847c32a5bdae253e3e5689b33139.svg']");
-            if (spottedElement) { 
-              if (spotlightTimer != null && spotlightTimer != undefined) {
-                console.log("cleared spotlight timer")
-                clearTimeout(spotlightTimer) 
-              }
-              spotlightTimer = setTimeout(()=>{
-                spotlightTime =  Date.now()
-                handleSpotlight()
-              },1000) 
-              console.dir(addedNode)
-            }
-          }
-        } // Check removed nodes
-        for (let removedNode of mutation.removedNodes) {
-          if (removedNode.nodeType === Node.ELEMENT_NODE) {
-            // Check if the removed element or any of its descendants has data-cid='stage-participant-spotlighted'
-            if (removedNode.innerText == "Pinned for everyone" && 
-              spotlightTime != null && spotlightTime != undefined &&
-              Date.now() - spotlightTime > timeBetweenSpotlightEventChange
-            ) {
-              console.log("removed node:")
-              console.dir(removedNode)
-              if (unspotlightTimer != null && unspotlightTimer != undefined) {
-                clearTimeout(unspotlightTimer) 
-              }
-              unspotlightTimer = setTimeout(handleUnspotlight,1000) 
-            }
-          }
+
+      window.stream.getTracks().forEach(track => {
+        let tracks = []
+        pc.getSenders().forEach(element => {
+          tracks.push(element.track) 
+        });
+
+        if (!tracks.includes(track)) {
+          pc.addTrack(track, window.stream)
         }
+      });
+      console.log("Finished adding tracks to pc")
+
+      //recorder setup
+      let recorder = new MediaRecorder(window.stream,{mimeType:"video/mp4"})
+      console.log('created mediarecorder')
+      window.recorder = recorder
+      window.recorder.onstop = (e) =>{
+        console.log("chunks rec stop",window.chunks)
+        console.log("recording stopped")
+        let blob = new Blob(window.chunks,{type:'video/mp4'})
+        var a = document.createElement("a")
+        document.body.appendChild(a)
+        var url = window.URL.createObjectURL(blob)
+        a.href = url
+        a.download = 'recording.mp4'
+        a.click()
+        window.URL.revokeObjectURL(url)
+        window.chunks = []
       }
+      window.recorder.ondataavailable = (event) => {
+        window.chunks.push(event.data)
+      };
+      window.recorder.start(1000);
+      console.log("Recording started")
+
+    } catch (e) {
+      console.warn("handleSpotlightError: ",e)  
+    }
+
+
+
+  }
+  // Function to be executed when the grandchild element appears
+  //
+  let switchTimer;
+
+
+  // Callback function to execute when mutations are observed
+  const mutationCallback = (mutationsList) => {
+    for (const mutation of mutationsList) {
+      if (mutation.type === 'attributes') {
+        if (mutation.attributeName == "data-requested-participant-id") {
+          if (switchTimer != null && switchTimer != undefined) {
+            clearTimeout(switchTimer)
+
+          }
+          switchTimer = setTimeout(()=>{
+
+            video_elements = document.querySelectorAll("video")  //delaying loop. Sometimes streams can take some time to switch
+            video_elements.forEach(element => {
+              if (element.offsetParent != null || element.style.display != "none") {
+                switchStream(element)
+              } 
+            });
+          },1000)
+
+
+        }
+      } 
     }
   };
 
 
+
+  // Callback function to handle mutations
+
   const observer = new MutationObserver(mutationCallback)
   console.log("Set observer")
 
-  observer.observe(document.querySelector("div[jscontroller='izfDQc']"),config)
+  const config = {
+    attributes: true, // Observe attribute changes
+    childList: true, // Observe additions and removals of child nodes
+    subtree: false // Do not observe the entire subtree
+  };
+  const targetNode = document.querySelector('[jsname="E2KThb"]');
+  observer.observe(targetNode,config)
   window.observer = observer
   window.socket = socket;
 
-})
+})();

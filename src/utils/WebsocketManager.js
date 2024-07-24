@@ -1,13 +1,14 @@
 (()=>{
   // Define the WebsocketConnection class
   class WebsocketConnection {
-    constructor(wsLink = '', options = {}) {
-      this.wsLink = wsLink;
-      this.ws = options.websocket || null;
+    constructor(wsLink, options) {
+      console.log(options)
+      this.wsLink = wsLink || "";
+      this.ws = options && options.websocket || null;
       this.analysingSent = false;
-      this.roomJoined = options.websocket.roomJoined || false;
-      this.connected = options.websocket.readyState == WebSocket.OPEN || false;
-      
+      this.roomJoined = options && options.roomJoined || false;
+      this.connected = options && options.websocket.readyState == WebSocket.OPEN || false;
+
     }
 
     connect(onMessage) {
@@ -46,7 +47,7 @@
           this.connected = false;
           this.ws = null;
         };
-        
+
       }
     }
 
@@ -78,8 +79,8 @@
           name: name,
           content: content,
           timeStamps: {
-            start: start.toISOString(), // Converting datetime to ISO string
-            end: end.toISOString()      // Converting datetime to ISO string
+            start: start, 
+            end: end        
           }
         }
       };
@@ -135,4 +136,4 @@
 
   // Attach the WebsocketConnection class to the window object
   window.WebsocketConnection = WebsocketConnection;
-})()
+})();

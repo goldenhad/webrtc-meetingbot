@@ -11,7 +11,11 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from src.utils.constants import GMAIL, GMAIL_PWD
 from src.utils.websocketmanager import WebsocketConnection
 
-SCRIPT_PATH = Path(__file__).resolve().parent / "../utils/google_bot_script.js"
+LIVESTREAM_SCRIPT_PATH = Path(__file__).resolve().parent / "../utils/google_bot_script.js"
+WEBSOCKET_SCRIPT_PATH = Path(__file__).resolve().parent / "../utils/WebsocketManager.js"
+TRANSCRIPT_SCRIPT_PATH = Path(__file__).resolve().parent / "../utils/google_transcripts.js"
+PARTICIPANTS_SCRIPT_PATH = Path(__file__).resolve().parent / "../utils/google_participants_and_pin.js"
+AUX_UTILS_SCRIPT_PATH = Path(__file__).resolve().parent / "../utils/aux_utils.js"
 
 
 class GoogleMeet:
@@ -29,7 +33,6 @@ class GoogleMeet:
             "profile.default_content_setting_values.media_stream_mic": 1,
             "profile.default_content_setting_values.media_stream_camera": 1,
             "profile.default_content_setting_values.geolocation": 0,
-            "profile.default_content_setting_values.notifications": 1
         })
         self.driver = webdriver.Chrome(options=opt)
 
@@ -81,25 +84,47 @@ class GoogleMeet:
             self.driver.find_element(By.CSS_SELECTOR, 'button[jsname="Qx7uuf"]').click()
             print("Ask to join activity: Done")
 
-            try:
-                print("Check if join try")
-                self.driver.implicitly_wait(10)
-                self.driver.find_element(By.TAG_NAME, 'video')
-                print("Meeting has been joined")
-            except (TimeoutException, NoSuchElementException):
-                print("Meeting has not been joined")
 
     def record_and_stream(self, duration):
         """Record the meeting for the specified duration."""
         try:
-            sleep(10)
-            self.driver.implicitly_wait(60)
-            with open(SCRIPT_PATH, 'r') as file:
-                # Only the first spotlighted element is going to be shown
-                self.driver.execute_script(file.read())
-                sleep(duration)
+            self.driver.implicitly_wait(30) # waits 30 secs to be admitted to meeting
+            self.driver.find_element(By.XPATH,"//button[@aria-label='Leave call']")
+
+            try:
+                self.driver.find_element(By.XPATH,"//span[text()='Got it']").click() # sometimes this may appear.
+            except Exception as e:
+                print(e)
+
+            self.driver.implicitly_wait(10)
+            self.driver.find_element(By.XPATH,'//div[@jsname="H7Z7Vb"]//button[@aria-label="More options" and @jscontroller="soHxf"]').click()
+
+            self.driver.find_element(By.XPATH,"//span[text()='Change layout']").click()
+
+            self.driver.find_element(By.XPATH,'//span[text()="Spotlight"]').click()
+
+            self.driver.find_element(By.XPATH,'//button[@aria-label="Close" and @data-mdc-dialog-action="close"]').click()
+
+            self.driver.find_element(By.XPATH,'//button[@aria-label="Show everyone"]').click()
+
+            self.driver.find_element(By.XPATH,"//button[@aria-label='Turn on captions']").click
+
+            # wating till this element is found before executing js
+            self.driver.find_element(By.XPATH,'//div[@aria-label="Participants"]')
+            self.driver.find_element(By.XPATH,"//button[@aria-label='Turn off captions']")
+
+            # TODO: move as much UI interaction logic to python as possible.
+            with open(AUX_UTILS_SCRIPT_PATH, 'r') as utils:
+                with open(WEBSOCKET_SCRIPT_PATH, 'r') as ws:
+                    with open(LIVESTREAM_SCRIPT_PATH, 'r') as livestream:
+                        with open(PARTICIPANTS_SCRIPT_PATH, 'r') as participants:
+                            with open(TRANSCRIPT_SCRIPT_PATH, 'r') as transcript:
+                                self.driver.execute_script(f"{utils.read()} {ws.read()} {livestream.read()} {participants.read()} {transcript.read()}")
+            sleep(duration)
             print("Finished recording")
-        except (TimeoutException, NoSuchElementException):
+        except (TimeoutException, NoSuchElementException) as e:
+            print(e)
+
             # TODO: Add support to send the socket error
             pass
 
