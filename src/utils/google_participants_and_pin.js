@@ -1,11 +1,9 @@
 (()=>{
   try {
+    function delay(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
 
-    //get all participant elements
-    //iterate through them
-    //see whether theres pin icon in any of htem
-    //if there is, unpin
-    //then pin the new guy
     async function togglePin(participantName) {
       participantElements = document.evaluate('//div[@aria-label="Participants"]//div[@role="listitem" and @data-participant-id]',
         document,
@@ -15,7 +13,7 @@
       )
       for (let i = 0; i < participantElements.snapshotLength; i++) {
         let participant = participantElements.snapshotItem(i);
-        let keepElement = document.evaluate(
+        let pinIcon = document.evaluate(
           './/i[text()="keep"]',
           participant,
           null,
@@ -24,24 +22,27 @@
         ).singleNodeValue;
         scrollTo(participant)
 
-        if (keepElement) {
-          // pinned icon found in participant
-          console.log("Found 'pinnned' in participant:", participant);
-          if (keepElement.querySelector('span.zWGUib')?.textContent != participantName) {
-            keepElement.querySelector("button[aria-label='More actions]").click()
-            const unpin = await window.waitForElement("//*[text()='Unpin']") 
+        if (pinIcon) {
+          // pinned icon found in participant. If pinned person is not subject, unpin
+          if (participant.querySelector('span.zWGUib')?.textContent != participantName) {
+            participant.querySelector("button[aria-label='More actions']").click()
+            await delay(500)
+            const unpin = await window.waitForElementAsync("//span[text()='Unpin']",document)
             unpin.click()
-          } 
+          }
         } else {
-          participant.querySelector("button[aria-label='More actions]").click()
-          const pintoScreen = await window.waitForElement("//span[text()='Pin to the screen']")
-          pintoScreen.click()
-          const forMyself = await window.waitForElement("//[text()='For myself only']")
-          forMyself.click()
-          console.log("No 'pinned' found in participant:", participant);
+          if (participant.querySelector('span.zWGUib')?.textContent == participantName) {
+            participant.querySelector("button[aria-label='More actions']").click()
+            const pin = await window.waitForElementAsync("//span[text()='Pin to the screen']",document)
+            pin.click()
+            await delay(500)
+            const myself = await window.waitForElementAsync("//*[text()='For myself only']",document)
+            myself.click()
+          }
         }
+        await delay(1000)
+        console.log("ran")
       }
-
     }
 
     const wsManager = new window.WebsocketConnection("",{websocket:window.socket,roomJoined:true})

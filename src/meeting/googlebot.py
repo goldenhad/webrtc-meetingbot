@@ -116,8 +116,8 @@ class GoogleMeet:
             # TODO: move as much UI interaction logic to python as possible.
             with open(AUX_UTILS_SCRIPT_PATH, 'r') as utils:
                 with open(WEBSOCKET_SCRIPT_PATH, 'r') as ws:
-                    with open(LIVESTREAM_SCRIPT_PATH, 'r') as livestream:
-                        with open(PARTICIPANTS_SCRIPT_PATH, 'r') as participants:
+                    with open(LIVESTREAM_SCRIPT_PATH, 'r') as livestream: # websocket connection is created
+                        with open(PARTICIPANTS_SCRIPT_PATH, 'r') as participants: # consumes websocket connection using wsManager
                             with open(TRANSCRIPT_SCRIPT_PATH, 'r') as transcript:
                                 self.driver.execute_script(f"{utils.read()} {ws.read()} {livestream.read()} {participants.read()} {transcript.read()}")
             sleep(duration)

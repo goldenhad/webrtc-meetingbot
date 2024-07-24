@@ -2,16 +2,25 @@ from pathlib import Path
 from time import sleep
 from selenium import webdriver
 from selenium.webdriver.chrome.webdriver import WebDriver
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 from os import environ
+# from src.meeting.googlebot import LIVESTREAM_SCRIPT_PATH
 from src.utils.websocketmanager import WebsocketConnection
 from src.utils.constants import OUTLOOK_PWD, OUTLOOK, BOT_NAME, TEAMS_URL
 
-SCRIPT_PATH = Path(__file__).resolve().parent / "../utils/teams_bot_script.js"
+LIVESTREAM_SCRIPT_PATH = Path(__file__).resolve().parent / "../utils/teams_bot_script.js"
+WEBSOCKET_SCRIPT_PATH = Path(__file__).resolve().parent / "../utils/WebsocketManager.js"
+AUX_UTILS_SCRIPT_PATH = Path(__file__).resolve().parent / "../utils/aux_utils.js"
+PARTICIPANTS_SCRIPT_PATH = Path(__file__).resolve().parent / "../utils/teams_participants.js"
+TRANSCRIPT_SCRIPT_PATH = Path(__file__).resolve().parent / "../utils/teams_transcript.js"
+
+
 
 class TeamsMeet:
     def __init__(self, meeting_link: str, ws_url: str):
@@ -124,10 +133,27 @@ class TeamsMeet:
     def record_and_capture(self ):
         """Creates WebRTC connection and start recording the spotlighted participant"""
         try:
-            self.driver.implicitly_wait(60)
-            with open(SCRIPT_PATH.resolve(),'r') as script:
-                self.driver.execute_script(script.read())
-                print("executed")
+            self.driver.implicitly_wait(10)
+            self.driver.find_element(By.ID,"view-mode-button").click()
+            
+            self.driver.find_element(By.XPATH,"//span[text()='Speaker']").click()
+
+
+            self.driver.find_element(By.ID,"roster-button").click()
+
+            #wait  for participants panel to show up before proceeding
+            self.driver.find_element(By.XPATH,"//h2[text()='Participants' and @data-tid='right-side-panel-header-title']")
+
+            #to switch live captions on
+            actions = ActionChains(self.driver)
+            actions.key_down(Keys.ALT).key_down(Keys.SHIFT).key_down("c").key_up(Keys.SHIFT).key_up(Keys.ALT).key_up("c").perform()
+
+            with open(AUX_UTILS_SCRIPT_PATH, 'r') as utils:
+                with open(WEBSOCKET_SCRIPT_PATH, 'r') as ws:
+                    with open(LIVESTREAM_SCRIPT_PATH, 'r') as livestream: # websocket connection is created
+                        with open(PARTICIPANTS_SCRIPT_PATH, 'r') as participants: # consumes websocket connection using wsManager
+                            with open(TRANSCRIPT_SCRIPT_PATH, 'r') as transcript:
+                                self.driver.execute_script(f"{utils.read()} {ws.read()} {livestream.read()} {participants.read()} {transcript.read()}")
 
             sleep(600)
         except Exception as e:
