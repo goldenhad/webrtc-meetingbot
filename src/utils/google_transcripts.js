@@ -16,7 +16,9 @@
         if (mutation.type === 'childList' || mutation.type === 'subtree') {
           // Get direct div children of the target node
           const transcriptSections = targetNode.querySelectorAll(':scope > div');
-          transcriptSections.forEach(section=>{
+          if (transcriptSections.length >= 2) {
+
+            const section =  transcriptSections[transcriptSections.length - 2] // gets the one before last transcript section. This is the only one that has most correct info
             let content = ""
             let author = ""
             const spans = section.querySelectorAll('span');
@@ -31,7 +33,8 @@
               Date.now(),
               Date.now()
             )  
-          })
+
+          }
         }
       }
     });

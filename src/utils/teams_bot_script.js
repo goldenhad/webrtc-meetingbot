@@ -238,4 +238,4 @@
   window.observer = observer
   window.socket = socket;
 
-})()
+})();
