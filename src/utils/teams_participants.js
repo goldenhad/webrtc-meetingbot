@@ -34,7 +34,7 @@
   const wsManager = new window.WebsocketConnection("",{websocket:window.socket,roomJoined:true})
   wsManager.connect(({data}) => {
       const jsonData = JSON.parse(data)
-      if (jsonData?.event == "subject") {
+      if (jsonData?.event == "select-subject") {
         togglePin(jsonData.data)   
       }
   })

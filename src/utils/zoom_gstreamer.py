@@ -121,10 +121,9 @@ class WebRTCClient:
         self.connect()
         async for message in self.conn:
             msg: dict = json.loads(message)
-            print(msg)
             event = msg["event"]
             to = msg["to"] if "to" in msg.keys() else ""
-            fromMsg = msg["from"]
+            fromMsg = msg["from"] if "from" in msg.keys() else ""
             
             if to != "bot":
                 continue

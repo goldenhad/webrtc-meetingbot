@@ -40,6 +40,15 @@ wss.on('connection', (ws) => {
         }
         break;
 
+      case 'select-subject':
+        console.log("subject event recieved")
+          rooms['room1'].forEach(client => {
+            if (client !== ws) {
+              console.log("send subject event")
+              client.send(JSON.stringify(data));
+            }
+          });
+        break;
       case 'transcription':
         console.log("transcription event recieved")
         console.log(data.data)
@@ -57,12 +66,8 @@ wss.on('connection', (ws) => {
         break;
       case 'subject':
         console.log("subject event recieved")
-          rooms['room1'].forEach(client => {
-            if (client !== ws) {
-              console.log("send subject event")
-              client.send(JSON.stringify(data));
-            }
-          });
+        console.log(data.data)
+        break;
         break;
       case 'processed':
         console.log("processed event recieved")

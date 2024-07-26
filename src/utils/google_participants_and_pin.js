@@ -50,7 +50,7 @@
       console.log("got message")
       const jsonData = JSON.parse(data)
 
-      if (jsonData?.event == "subject") {
+      if (jsonData?.event == "select-subject") {
         togglePin(jsonData.data)   
       }
     })

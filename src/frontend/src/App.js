@@ -65,7 +65,7 @@ const App = () => {
   )
   const handleClick = () => {
     // Call the function with the input value
-    sendJsonMessage({event:"subject",data:inputValue});
+    sendJsonMessage({event:"select-subject",data:inputValue});
   };
 
   useEffect(()=>{

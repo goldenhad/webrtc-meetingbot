@@ -4,13 +4,11 @@ import subprocess
 from uuid import uuid4
 import sys
 import websockets
-import random
-import argparse
 import re
 from time import sleep
 from selenium import webdriver
 from selenium.webdriver.common.action_chains import ActionChains
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
@@ -20,8 +18,10 @@ from os import environ
 from datetime import datetime
 from typing import Callable, List
 from pydantic import UUID4
-from websocket import WebSocket
 import json
+
+WAIT_ADMIT_TIME = 120
+GSTREAMER_PATH = Path(__file__).resolve().parent / "../utils/zoom_gstreamer.py"
 
 class WebsocketConnection:
     def __init__(self,ws_link: str) -> None:
@@ -102,25 +102,6 @@ class WebsocketConnection:
             self.ws.close()
             self.connected = False
 
-    async def loop(self):
-        self.connect()
-        async for message in self.ws:    
-            msg: dict = json.loads(message)
-            print(msg)
-            event = msg["event"]
-            to = msg["to"] if "to" in msg.keys() else ""
-            fromMsg = msg["from"]
-
-            if to != "bot":
-                continue
-            if event == "select-subject"
-             
-
-        
-
-WAIT_ADMIT_TIME = 120
-GSTREAMER_PATH = Path(__file__).resolve().parent / "../utils/zoom_gstreamer.py"
-
 class ZoomMeet:
     def __init__(self, meeting_link, xvfb_display, ws_link, meeting_id, zoom_email="", zoom_password=""):
         self.zoom_email = zoom_email
@@ -131,6 +112,7 @@ class ZoomMeet:
         self.meeting_link = meeting_link
         self.inference_id = uuid4()
         self.scraping_section_ids = {}
+        self.websocket = WebsocketConnection(ws_link)
 
         # create chrome instance
         opt = Options()
@@ -146,6 +128,18 @@ class ZoomMeet:
         })
         self.driver = webdriver.Chrome(options=opt)
         self.socket = WebsocketConnection(ws_link)
+
+    async def loop(self):
+        async for message in self.websocket.conn:    
+            msg: dict = json.loads(message)
+            print(msg)
+            event = msg["event"]
+
+            if event == "select-subject":
+                print("need to call pin participant")
+                self.pin_participant(msg['data'])
+                print("finished pin participant func")
+        return 0
 
     def join_meeting(self):
         print(self.xvfb_display)
@@ -234,17 +228,17 @@ class ZoomMeet:
 
         self.driver.find_element(By.XPATH,"//a[text()='Speaker View']").click()
 
-        active_speaker = self.driver.find_element(By.XPATH,"//div[@class='speaker-active-container__video-frame']")
 
         # need to click twice. Zoom bug
         self.driver.find_element(By.XPATH, '//div[@feature-type="participant"]').click()
         sleep(5)
         self.driver.find_element(By.XPATH, '//div[@feature-type="participant"]').click()
 
+        sleep(5) # give some time for the viewport to adjust before getting coords
 
         panel_height = self.driver.execute_script('return window.outerHeight - window.innerHeight;')
 
-        height, width, x, y = active_speaker.rect.values()
+        height, width, x, y = self.driver.find_element(By.XPATH,"//div[@class='speaker-active-container__video-frame']").rect.values()
         y += panel_height
 
         self.height = height
@@ -273,13 +267,15 @@ class ZoomMeet:
             str(y+height)
         ])
 
+        self.websocket.send_analysing(self.meeting_id,self.inference_id)
         print("ran gstreamer")
-        sleep(300)
 
     def pin_participant(self, participant_name) -> None:
+        print("pin called")
+        print(participant_name)
         try:
-
-            self.driver.implicitly_wait(10)
+            
+            self.driver.implicitly_wait(5)
             self.driver.find_element(By.XPATH, '//div[contains(@class,"participants-section-container")]')
             search_available = True
             participant_search = None
@@ -290,10 +286,13 @@ class ZoomMeet:
 
 
             if search_available and participant_search != None:
+                print("search available")
                 participant_search.send_keys(100*"\b")
                 participant_search.send_keys(participant_name)
                 participant_list = self.driver.find_elements(By.XPATH,"//div[@class='participants-item-position']")
                 for element in participant_list:
+                    # its ok to just loop through this. Search has already filterd it out
+
                     ActionChains(self.driver).move_to_element(element).click().perform()
                     sleep(3)
                     more_button = element.find_element(By.XPATH,".//span[text()='More']")
@@ -303,53 +302,47 @@ class ZoomMeet:
                         EC.element_to_be_clickable(more_button)
                     )
                     more_button.click()
-                    self.driver.implicitly_wait(10)
+                    self.driver.implicitly_wait(2)
 
                     try:
-                        replace_pin_button = self.driver.find_element(By.XPATH, '//button[text()="Replace Pin"]')
-
-                        if replace_pin_button:
-                            element = replace_pin_button
-                        else:
-                            # If "Replace Pin" button is not found, try to find the "Add Pin" button
-                            add_pin_button = self.driver.find_element(By.XPATH, '//button[text()="Add Pin"]')
-                            if add_pin_button:
-                                element = add_pin_button
-                            else:
-                                element = None
-                        element.click() if element != None else None
-                    except TimeoutException:
+                        self.driver.find_element(By.XPATH, '//button[text()="Replace Pin"]').click()
+                        print("got replace")
+                    except (NoSuchElementException, TimeoutException):
+                        self.driver.find_element(By.XPATH, '//button[text()="Add Pin"]').click()
+                        print("got add ")
+                    except Exception as e:
                         print("add / replace pin button not found")
+                        print(e)
                 participant_search.send_keys(len(participant_name)*"\b")
             else:
+                print("no search available")
                 participant_list = self.driver.find_elements(By.XPATH,"//div[@class='participants-item-position']")
                 for element in participant_list:
-                    ActionChains(self.driver).move_to_element(element).click().perform()
-                    sleep(3)
-                    more_button = element.find_element(By.XPATH,".//span[text()='More']")
+                    name = element.find_element(By.XPATH,".//span[@class='participants-item__display-name']").text
+                    print(name)
+                    if name in  participant_name:
+                        print("name in participant name")
+                        ActionChains(self.driver).move_to_element(element).click().perform()
+                        sleep(1)
+                        more_button = element.find_element(By.XPATH,".//span[text()='More']")
 
-                    self.driver.implicitly_wait(0) # remove implicit wait before setting explicit. Should not mix both
-                    WebDriverWait(self.driver,5).until(
-                        EC.element_to_be_clickable(more_button)
-                    )
-                    more_button.click()
-                    self.driver.implicitly_wait(10)
+                        self.driver.implicitly_wait(0) # remove implicit wait before setting explicit. Should not mix both
+                        WebDriverWait(self.driver,5).until(
+                            EC.element_to_be_clickable(more_button)
+                        )
+                        more_button.click()
+                        print("clicked more")
+                        self.driver.implicitly_wait(2)
 
-                    try:
-                        replace_pin_button = self.driver.find_element(By.XPATH, '//button[text()="Replace Pin"]')
-
-                        if replace_pin_button:
-                            element = replace_pin_button
-                        else:
-                            # If "Replace Pin" button is not found, try to find the "Add Pin" button
-                            add_pin_button = self.driver.find_element(By.XPATH, '//button[text()="Add Pin"]')
-                            if add_pin_button:
-                                element = add_pin_button
-                            else:
-                                element = None
-                        element.click() if element != None else None
-                    except TimeoutException:
-                        print("add / replace pin button not found")
+                        try:
+                            self.driver.find_element(By.XPATH, '//button[text()="Replace Pin"]').click()
+                            print("got replace")
+                        except (NoSuchElementException, TimeoutException):
+                            self.driver.find_element(By.XPATH, '//button[text()="Add Pin"]').click()
+                            print("got add ")
+                        except Exception as e:
+                            print("add / replace pin button not found")
+                            print(e)
 
         except Exception as e:
             self.driver.save_screenshot("spotlight_error.png")
@@ -383,3 +376,5 @@ if __name__ == "__main__":
     print("ran")
     zoom.join_meeting()
     zoom.record_and_stream()
+    asyncio.get_event_loop().run_until_complete(zoom.websocket.connect())
+    res = asyncio.get_event_loop().run_until_complete(zoom.loop())
