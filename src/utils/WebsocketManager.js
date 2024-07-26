@@ -29,10 +29,10 @@
           this.connected = false;
           this.ws = null;
         };
-      } else if (this.ws != null && this.connected) {
-        const oldOnmessage = ws.onmessage
-        const oldOnopen = ws.onopen
-        const oldOnclose = ws.onclose
+      } else if (this.ws != null && this.ws != undefined) {
+        const oldOnmessage = this.ws.onmessage
+        const oldOnopen = this.ws.onopen
+        const oldOnclose = this.ws.onclose
         this.ws.onmessage = (event) =>{
           oldOnmessage(event)
           onMessage(event)

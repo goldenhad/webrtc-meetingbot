@@ -9,7 +9,14 @@ const App = () => {
   const [ignoreoffer,setIgnoreOffer] = useState(false)
   const [issettingremoteanswerpending,setIsssettingremoteanswerpending] = useState(false)
   const [userId, setUserId] = useState(Date.now())
-  const { readyState,sendJsonMessage} = useWebSocket("ws://127.0.0.1:7000/ws",
+  const [inputValue, setInputValue] = useState('');
+
+  const handleInputChange = (event) => {
+    setInputValue(event.target.value);
+  };
+
+
+  const { readyState,sendJsonMessage} = useWebSocket("ws://127.0.0.1:7000/",
     {
       onMessage:
       async ({data}) => {
@@ -56,8 +63,10 @@ const App = () => {
 
     }
   )
-  useEffect(()=>{
-  },[])
+  const handleClick = () => {
+    // Call the function with the input value
+    sendJsonMessage({event:"subject",data:inputValue});
+  };
 
   useEffect(()=>{
     if (readyState == ReadyState.OPEN) {
@@ -168,6 +177,13 @@ const App = () => {
     <header className="App-header">
     <video id="video" controls autoPlay></video>
     <button onClick={()=>connectToBot()}>Connect to bot</button>
+    <input 
+    type="text" 
+    value={inputValue} 
+    onChange={handleInputChange} 
+    placeholder="Enter subject name" 
+    />
+    <button onClick={handleClick}>Submit</button>
     </header>
     </div>
   );

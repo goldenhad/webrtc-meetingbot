@@ -1,0 +1,2 @@
+#!/bin/sh 
+xvfb-run --listen-tcp --server-num=25 --auth-file=/tmp/xvfb.auth -s "-ac -screen 0 1920x1080x24" python -m src.meeting.zoombot https://us04web.zoom.us/j/75881336719?pwd=njM9UL0jYaeKH05O52UAOt2ppHcfiw.1 25 http://localhost:7000 testid

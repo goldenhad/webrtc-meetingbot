@@ -1,5 +1,4 @@
 (()=>{
-
   function togglePin(subjectName) {
 
     const attendeesParent = document.querySelector("[aria-label='Participants']")
@@ -33,11 +32,11 @@
   }
 
   const wsManager = new window.WebsocketConnection("",{websocket:window.socket,roomJoined:true})
-  wsManager.connect((message) => {
-    const jsonData = JSON.parse(message)
-    if (jsonData?.event == "subject") {
-      togglePin(jsonData.data)   
-    }
+  wsManager.connect(({data}) => {
+      const jsonData = JSON.parse(data)
+      if (jsonData?.event == "subject") {
+        togglePin(jsonData.data)   
+      }
   })
   const attendeesDiv = document.querySelector('div[aria-label="Attendees"]');
   let processNodesTimer;
@@ -60,33 +59,57 @@
     console.log(participantsList)
   }
 
+  let quitTimeout;
+
+  function setParticipantsTimeout() {
+    const attendeesParent = document.querySelector("[aria-label='Participants']")
+
+    const numberOfAttendees = attendeesParent.querySelectorAll("li[role='presentation'][data-cid='roster-participant']").length
+    if (numberOfAttendees < 3) {
+      quitTimeout = setTimeout(()=>{
+        throw QuitError()
+      },TIME_TO_QUIT)  
+
+    }
+    else{
+      clearTimeout(quitTimeout)
+    }
+  }
+
   if (attendeesDiv) {
+
+    setParticipantsTimeout() // quitting if total participants < 3
+
     // Create a mutation observer to watch for changes
     const observer = new MutationObserver(mutations => {
       mutations.forEach(mutation => {
         mutation.addedNodes.forEach(node => {
           if (node.nodeType == node.ELEMENT_NODE && !node.hasAttribute('data-cid') && node.getAttribute('data-cid') != "roster-participant-pinned") {
-            
-          if (processNodesTimer != null && processNodesTimer != undefined) {
-            clearTimeout(processNodesTimer)
-          }
-          processNodesTimer = setTimeout(() => {
 
-            processNodes();
-          }, 500); 
+            if (processNodesTimer != null && processNodesTimer != undefined) {
+              clearTimeout(processNodesTimer)
+            }
+            processNodesTimer = setTimeout(() => {
+
+              processNodes();
+            }, 500); 
+
+          setParticipantsTimeout()
           }
         });
 
         mutation.removedNodes.forEach(node => {
           if (node.nodeType == node.ELEMENT_NODE && !node.hasAttribute('data-cid') && node.getAttribute('data-cid') != "roster-participant-pinned") {
-            
-          if (processNodesTimer != null && processNodesTimer != undefined) {
-            clearTimeout(processNodesTimer)
-          }
-          processNodesTimer = setTimeout(() => {
 
-            processNodes();
-          }, 500); 
+            if (processNodesTimer != null && processNodesTimer != undefined) {
+              clearTimeout(processNodesTimer)
+            }
+            processNodesTimer = setTimeout(() => {
+
+              processNodes();
+            }, 500); 
+
+          setParticipantsTimeout()
           }
         });
       });

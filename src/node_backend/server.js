@@ -13,7 +13,6 @@ let rooms = {};
 wss.on('connection', (ws) => {
   ws.on('message', (message) => {
     const data = JSON.parse(message);
-    console.log(data.event)
     switch (data.event) {
       case 'join-room':
         if (!rooms[data.room]) {
@@ -58,7 +57,12 @@ wss.on('connection', (ws) => {
         break;
       case 'subject':
         console.log("subject event recieved")
-        console.log(data.data)
+          rooms['room1'].forEach(client => {
+            if (client !== ws) {
+              console.log("send subject event")
+              client.send(JSON.stringify(data));
+            }
+          });
         break;
       case 'processed':
         console.log("processed event recieved")

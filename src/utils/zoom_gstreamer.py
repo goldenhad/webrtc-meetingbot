@@ -84,7 +84,7 @@ class WebRTCClient:
         loop.run_until_complete(self.conn.send(icemsg))
 
     def start_pipeline(self):
-        self.pipe = Gst.parse_launch(PIPELINE_DESC)
+        self.pipe = Gst.parse_launch(self.pipeline_desc)
         self.webrtc = self.pipe.get_by_name('sendrecv')
         self.webrtc.connect('on-negotiation-needed', self.on_negotiation_needed)
         self.webrtc.connect('on-ice-candidate', self.send_ice_candidate_message)
@@ -120,17 +120,18 @@ class WebRTCClient:
         assert self.conn
         self.connect()
         async for message in self.conn:
-            msg = json.loads(message)
+            msg: dict = json.loads(message)
+            print(msg)
             event = msg["event"]
-            to = msg["to"]
+            to = msg["to"] if "to" in msg.keys() else ""
             fromMsg = msg["from"]
             
             if to != "bot":
                 continue
             if event == "livestream":
-                self.start_pipeline()
                 print('started pipeline')
                 self.clientId = fromMsg
+                self.start_pipeline()
             else:
                 print("need to handle sdp")
                 await self.handle_sdp(message)
@@ -151,7 +152,10 @@ if __name__=='__main__':
     our_id = random.randrange(10, 10000)
     # c = WebRTCClient(our_id, args.peerid, args.server)
 
-    pipeline_desc = f"ximagesrc display-name=:{args.display_num} startx={args.startx} starty={args.starty} endx={args.endx} endy={args.endy} ! video/x-raw,framerate=30/1 ! videoconvert ! queue ! vp8enc deadline=1 ! rtpvp8pay ! webrtcbin bundle-policy=max-bundle name=sendrecv"
+    pipeline_desc = f"ximagesrc display-name={args.display_num} startx={args.startx} starty={args.starty} endx={args.endx} endy={args.endy} ! video/x-raw,framerate=30/1 ! videoconvert ! queue ! vp8enc deadline=1 ! rtpvp8pay ! webrtcbin bundle-policy=max-bundle name=sendrecv"
+    # pipeline_desc = f"videotestsrc ! video/x-raw,framerate=30/1 ! videoconvert ! queue ! vp8enc deadline=1 ! rtpvp8pay ! webrtcbin bundle-policy=max-bundle name=sendrecv"
+    print(args.display_num)
+
     c = WebRTCClient(pipeline_desc)
     asyncio.get_event_loop().run_until_complete(c.connect())
     res = asyncio.get_event_loop().run_until_complete(c.loop())

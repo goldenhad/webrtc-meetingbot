@@ -26,16 +26,16 @@
           // pinned icon found in participant. If pinned person is not subject, unpin
           if (participant.querySelector('span.zWGUib')?.textContent != participantName) {
             participant.querySelector("button[aria-label='More actions']").click()
-            await delay(500)
+            await delay(1000)
             const unpin = await window.waitForElementAsync("//span[text()='Unpin']",document)
             unpin.click()
           }
         } else {
           if (participant.querySelector('span.zWGUib')?.textContent == participantName) {
             participant.querySelector("button[aria-label='More actions']").click()
-            const pin = await window.waitForElementAsync("//span[text()='Pin to the screen']",document)
+            const pin = await window.waitForElementAsync("//span[text()='Pin to screen']",document)
             pin.click()
-            await delay(500)
+            await delay(1000)
             const myself = await window.waitForElementAsync("//*[text()='For myself only']",document)
             myself.click()
           }
@@ -46,21 +46,45 @@
     }
 
     const wsManager = new window.WebsocketConnection("",{websocket:window.socket,roomJoined:true})
-    wsManager.connect((message) => {
-      const jsonData = JSON.parse(message)
+    wsManager.connect(({data}) => {
+      console.log("got message")
+      const jsonData = JSON.parse(data)
+
       if (jsonData?.event == "subject") {
         togglePin(jsonData.data)   
       }
     })
+
+    let quitTimeout;
 
     function handleMutations(mutationsList) {
       const participantNames = []; // List to collect text from spans
 
       for (const mutation of mutationsList) {
         if (mutation.type === 'childList') {
+
+          const participantNumber = document.evaluate(
+            "count(//*[@role='listitem and @data-participant-id])",
+            document,
+            null,
+            XPathResult.NUMBER_TYPE
+          ).numberValue
+
+          if (participantNumber < 3) {
+            console.log("Only 1 other user... Starting timer")
+            quitTimeout = setTimeout(()=>{
+              throw QuitError()
+            },TIME_TO_QUIT)  
+          }
+          else{
+            console.log("User joined... Removing timer")
+            clearTimeout(quitTimeout)
+          }
+
           mutation.addedNodes.forEach(node => {
             if (node.nodeType === Node.ELEMENT_NODE && node.getAttribute('role') === 'listitem' && node.hasAttribute('data-participant-id')) {
               console.log('Added:', node);
+
 
               // Extract text from span with class="zWGUib" inside the added node
               const spans = document.querySelectorAll('div[aria-label="Participants"] span.zWGUib');
@@ -97,6 +121,7 @@
       console.log("got targetnode")
       // Create an observer instance linked to the callback function
       const observer = new MutationObserver(handleMutations);
+      const participantCountObserver = new MutationObserver(handleMutations);
 
 
       // Options for the observer (which mutations to observe)
@@ -110,6 +135,9 @@
 
   } catch (error) {
     console.error(error) 
+    if (error instanceof QuitError) {
+      throw error 
+    }
   }
 
 })();

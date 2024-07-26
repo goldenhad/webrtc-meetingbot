@@ -1,5 +1,10 @@
 # import required modules
+import asyncio
+import subprocess
 from uuid import uuid4
+import sys
+import websockets
+import random
 import argparse
 import re
 from time import sleep
@@ -10,13 +15,114 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support import expected_conditions as EC
-from src.utils.websocketmanager import WebsocketConnection
+from pathlib import Path
 from os import environ
+from datetime import datetime
+from typing import Callable, List
+from pydantic import UUID4
+from websocket import WebSocket
+import json
+
+class WebsocketConnection:
+    def __init__(self,ws_link: str) -> None:
+        self.ws_link: str = ws_link
+        self.ws = None
+        self.analysing_sent: bool = False
+        self.room_joined: bool = False
+        self.connected: bool = False
+
+
+    async def connect(self):
+        self.conn = await websockets.connect(self.ws_link)
+        await self.conn.send(json.dumps({
+            'event':"join-room",
+            'room':"room1"   
+        }))
+
+    def __ws_send(self,payload: dict):
+        if self.ws != None:
+            loop = asyncio.new_event_loop()
+            loop.run_until_complete(self.ws.send(json.dumps(payload)))
+
+            
+    def join_room(self, room_id: str, start_time: datetime, inference_id: UUID4):
+        payload = {
+            "event": "join-room",
+            "data": {"roomId":room_id,"startTime": start_time, "inferenceId": inference_id}
+        }
+        if not self.room_joined:
+            self.__ws_send(payload)
+
+    def send_transcription(self, name: str, content: str, start: datetime, end: datetime):
+        payload = {
+            "event": "transcription",
+            "data": {"name":name,"content": content, "timeStamps": {
+                "start": start,
+                "end": end
+            }}
+        }
+        self.__ws_send(payload)
+
+    def bot_error(self):
+        payload = {
+            "event": "extension-bot-error"
+        }
+        self.__ws_send(payload)
+
+
+    def send_analysing(self, meeting_id: str, inference_id: UUID4, rtmp_url: str = ""):
+        payload = {
+            "event": "analysing",
+            "data": {
+                "meetingId": meeting_id,
+                "inferenceId": inference_id,
+                "rtmpUrl": rtmp_url,
+            }
+        }
+        if not self.analysing_sent:
+            self.__ws_send(payload)
+            self.analysing_sent = True
+
+    def send_participants(self, participants: List[str]):
+        payload = {
+            "event": "participants",
+            "data": participants
+        }
+        self.__ws_send(payload)
+
+    def send_subject(self, subject: str):
+        payload = {
+            "event": "subject",
+            "data": subject
+        }
+        self.__ws_send(payload)
+
+    def close(self):
+        if self.ws != None:
+            self.ws.close()
+            self.connected = False
+
+    async def loop(self):
+        self.connect()
+        async for message in self.ws:    
+            msg: dict = json.loads(message)
+            print(msg)
+            event = msg["event"]
+            to = msg["to"] if "to" in msg.keys() else ""
+            fromMsg = msg["from"]
+
+            if to != "bot":
+                continue
+            if event == "select-subject"
+             
+
+        
 
 WAIT_ADMIT_TIME = 120
+GSTREAMER_PATH = Path(__file__).resolve().parent / "../utils/zoom_gstreamer.py"
 
-class JoinZoomMeet:
-    def __init__(self, meeting_link, zoom_email, zoom_password, xvfb_display, ws_link, meeting_id):
+class ZoomMeet:
+    def __init__(self, meeting_link, xvfb_display, ws_link, meeting_id, zoom_email="", zoom_password=""):
         self.zoom_email = zoom_email
         self.zoom_password = zoom_password
         self.xvfb_display = xvfb_display
@@ -25,10 +131,13 @@ class JoinZoomMeet:
         self.meeting_link = meeting_link
         self.inference_id = uuid4()
         self.scraping_section_ids = {}
+
         # create chrome instance
         opt = Options()
         opt.add_argument('--disable-blink-features=AutomationControlled')
         opt.add_argument('--start-maximized')
+        # opt.add_argument("--no-sandbox");
+        # opt.add_argument("--disable-dev-shm-usage");
         opt.add_experimental_option("prefs", {
             "profile.default_content_setting_values.media_stream_mic": 1,
             "profile.default_content_setting_values.media_stream_camera": 1,
@@ -39,6 +148,8 @@ class JoinZoomMeet:
         self.socket = WebsocketConnection(ws_link)
 
     def join_meeting(self):
+        print(self.xvfb_display)
+        print(self.meeting_link)
         try:
             meeting_id = re.search(r'(?<=wc/)\d+', self.meeting_link).group()
         except:
@@ -48,12 +159,13 @@ class JoinZoomMeet:
 
         self.driver.get(f"https://app.zoom.us/wc/{meeting_id}/join?pwd={password}")
 
-        if not hasattr(environ,"DEV"):
-            self.driver.implicitly_wait(10)
-            self.driver.find_element(By.XPATH, "//button[@id='onetrust-accept-btn-handler']").click()
-
-            self.driver.find_element(By.XPATH, '//button[@id="wc_agree1"]').click()
-
+        self.driver.maximize_window()
+        # if not hasattr(environ,"DEV"):
+        #     self.driver.implicitly_wait(10)
+        #     self.driver.find_element(By.XPATH, "//button[@id='onetrust-accept-btn-handler']").click()
+        #
+        #     self.driver.find_element(By.XPATH, '//button[@id="wc_agree1"]').click()
+        #
 
         self.driver.implicitly_wait(60)
         self.driver.find_element(By.ID, 'input-for-name').send_keys(self.botname)
@@ -71,7 +183,22 @@ class JoinZoomMeet:
         self.driver.implicitly_wait(WAIT_ADMIT_TIME)
         self.driver.find_element(By.CLASS_NAME, 'SvgShare')
 
-        more_button = self.driver.find_element(By.ID, 'moreButton')
+        # Wait for the element with text "Join Audio by Computer" to appear
+        join_audio_button = WebDriverWait(self.driver, 60).until(
+            EC.presence_of_element_located((By.XPATH, '//*[text()="Join Audio by Computer"]'))
+        )
+        sleep(5)
+
+        # Click the join audio button
+        if join_audio_button.is_enabled() and join_audio_button.is_displayed():
+            # Click the join audio button
+            join_audio_button.click()
+
+        sleep(5)
+        more_button = WebDriverWait(self.driver, 10).until(
+            EC.presence_of_element_located((By.ID, 'moreButton'))
+        )
+
         # Click the more button twice. zoom issue
         more_button.click()
         sleep(5)
@@ -101,7 +228,6 @@ class JoinZoomMeet:
             
         print("Joined to meeting")
 
-
     def record_and_stream(self):
         self.driver.implicitly_wait(10)  
         self.driver.find_element(By.XPATH,"//span[text()='View']").click()
@@ -114,6 +240,7 @@ class JoinZoomMeet:
         self.driver.find_element(By.XPATH, '//div[@feature-type="participant"]').click()
         sleep(5)
         self.driver.find_element(By.XPATH, '//div[@feature-type="participant"]').click()
+
 
         panel_height = self.driver.execute_script('return window.outerHeight - window.innerHeight;')
 
@@ -130,6 +257,24 @@ class JoinZoomMeet:
             self.inference_id
         )
 
+        subprocess.Popen([
+            # "xvfb-run --listen-tcp --server-num=44 --auth-file=/tmp/xvfb.auth -s "-ac -screen 0 1920x1080x24" /
+            "python",
+            str(GSTREAMER_PATH.resolve()),
+            "--display_num",
+            f":{self.xvfb_display}",
+            "--startx",
+            str(x),
+            "--starty",
+            str(y),
+            "--endx",
+            str(x+width),
+            "--endy",
+            str(y+height)
+        ])
+
+        print("ran gstreamer")
+        sleep(300)
 
     def pin_participant(self, participant_name) -> None:
         try:
@@ -227,21 +372,14 @@ class JoinZoomMeet:
                 self.driver.execute_script("arguments[0].setAttribute('scraping-id',arguments[1]);",subtitle_container,generated_scraping_id)
                 self.scraping_section_ids[generated_scraping_id] = subtitle_container.text
 
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Process some arguments.")
-    parser.add_argument('--wbsocket_url', type=str, required=True, help='WebSocket URL')
-    parser.add_argument('--zoom_email', type=str, required=True, help='Zoom email')
-    parser.add_argument('--zoom_password', type=str, required=True, help='Zoom password')
-    parser.add_argument('--xvfb_display', type=int, required=True, help='Xvfb display number')
-
-    args = parser.parse_args()
-
-    print(f"WebSocket URL: {args.wbsocket_url}")
-    print(f"Zoom Email: {args.zoom_email}")
-    print(f"Zoom Password: {args.zoom_password}")
-    print(f"Xvfb Display Number: {args.xvfb_display}")
-
 if __name__ == "__main__":
-    main()
+    args = sys.argv[1:]
+
+    zoom = ZoomMeet(args[0], # meeting url
+                    args[1], # xvfb numner 
+                    args[2], # ws_link 
+                    args[3], # meeting_id
+                    )
+    print("ran")
+    zoom.join_meeting()
+    zoom.record_and_stream()

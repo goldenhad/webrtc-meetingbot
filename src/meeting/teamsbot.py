@@ -153,13 +153,16 @@ class TeamsMeet:
                     with open(LIVESTREAM_SCRIPT_PATH, 'r') as livestream: # websocket connection is created
                         with open(PARTICIPANTS_SCRIPT_PATH, 'r') as participants: # consumes websocket connection using wsManager
                             with open(TRANSCRIPT_SCRIPT_PATH, 'r') as transcript:
-                                self.driver.execute_script(f"{utils.read()} {ws.read()} {livestream.read()} {participants.read()} {transcript.read()}")
+                                self.driver.execute_script(f"{utils.read()} {ws.read()} {livestream.read()} {participants.read()}")
+                                self.driver.implicitly_wait(60)
+                                self.driver.find_element(By.XPATH,'//div[@data-tid="closed-captions-renderer"]')
+                                self.driver.execute_script(f"{transcript.read()}")
+                                # self.driver.execute_script(f"{utils.read()} {ws.read()} {livestream.read()} {participants.read()} {transcript.read()}")
 
             sleep(600)
         except Exception as e:
             print(e)
-            print("couldn't find any spotlighted instances")
-            pass
+            print("Unexpected error")
 
 
 
