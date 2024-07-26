@@ -80,9 +80,9 @@ class GoogleMeet:
             self.driver.implicitly_wait(3000)
             print("Turn off camera activity: Done")
 
-            self.driver.implicitly_wait(2000)
-            self.driver.find_element(By.CSS_SELECTOR, 'button[jsname="Qx7uuf"]').click()
-            print("Ask to join activity: Done")
+        self.driver.implicitly_wait(2000)
+        self.driver.find_element(By.CSS_SELECTOR, 'button[jsname="Qx7uuf"]').click()
+        print("Ask to join activity: Done")
 
 
     def record_and_stream(self, duration):
@@ -107,7 +107,7 @@ class GoogleMeet:
 
             self.driver.find_element(By.XPATH,'//button[@aria-label="Show everyone"]').click()
 
-            self.driver.find_element(By.XPATH,"//button[@aria-label='Turn on captions']").click
+            self.driver.find_element(By.XPATH,"//button[@aria-label='Turn on captions']").click()
 
             # wating till this element is found before executing js
             self.driver.find_element(By.XPATH,'//div[@aria-label="Participants"]')
@@ -120,7 +120,9 @@ class GoogleMeet:
                         with open(PARTICIPANTS_SCRIPT_PATH, 'r') as participants: # consumes websocket connection using wsManager
                             with open(TRANSCRIPT_SCRIPT_PATH, 'r') as transcript:
                                 self.driver.execute_script(f"{utils.read()} {ws.read()} {livestream.read()} {participants.read()} {transcript.read()}")
-            sleep(duration)
+                                print('executed')
+            # sleep(duration)
+            sleep(120)
             print("Finished recording")
         except (TimeoutException, NoSuchElementException) as e:
             print(e)

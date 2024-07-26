@@ -25,6 +25,7 @@ wss.on('connection', (ws) => {
         break;
       
       // webrtc events
+      case "livestream":
       case 'connect':
       case 'offer':
       case 'answer':
@@ -33,6 +34,7 @@ wss.on('connection', (ws) => {
         if (rooms[data.room]) {
           rooms[data.room].forEach(client => {
             if (client !== ws) {
+              console.log(data)
               client.send(JSON.stringify(data));
             }
           });

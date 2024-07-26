@@ -2,7 +2,7 @@
 // via websocket
 
 (() =>{
-
+  window.peerConnections = {}
   //const socket = new window.WebsocketConnection('ws://localhost:7000')
   const socket = new WebSocket('ws://localhost:7000');
   //webrtc config
@@ -52,71 +52,10 @@
     socket.send(JSON.stringify({ event: 'join-room', room: 'room1' }));
   };
 
-  let makingoffer = false;
-  let ignoreoffer = false;
-  let issettingremoteanswerpending = false;
-
   // Perfect WebRTC peer negotiation pattern
   // https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API/Perfect_negotiation
-
-  // sets pc to be global variable so that future ice candidates can access it. If another connection is made, this will break the initial connection though
-  const pc = new RTCPeerConnection(configuration);
-
-  // send any ice candidates to the other peer
-  pc.onicecandidate = ({candidate}) =>  socket.send(JSON.stringify({ event: 'candidate', room: 'room1',from:"bot", candidate: candidate }))
-
-  // let the "negotiationneeded" event trigger offer generation
-  pc.onnegotiationneeded = async () => {
-    console.log("negotiationneeded")
-    try {
-      makingoffer = true;
-      await pc.setLocalDescription();
-      console.log("making offer")
-      socket.send(JSON.stringify({ event: pc.localDescription.type, room: 'room1',from:"bot", description: pc.localDescription }));
-    } catch (err) {
-      console.error(err);
-    } finally {
-      makingoffer = false;
-    }
-  };
-
-  socket.onmessage = async ({data}) => {
-    const description = JSON.parse(data)?.description
-    const candidate = JSON.parse(data)?.candidate
-    try {
-      if (description) {
-        // an offer may come in while we are busy processing srd(answer).
-        // in this case, we will be in "stable" by the ime the offer is processed
-        // so it is safe to chain it on our operations chain now.
-        const readyforoffer =
-          !makingoffer &&
-          (pc.signalingstate == "stable" || issettingremoteanswerpending);
-        const offercollision = description.type == "offer" && !readyforoffer;
-
-        ignoreoffer = !polite && offercollision;
-        if (ignoreoffer) {
-          return;
-        }
-        issettingremoteanswerpending = description.type == "answer";
-        await pc.setRemoteDescription(description); // srd rolls back as needed
-        issettingremoteanswerpending = false;
-        if (description.type == "offer") {
-          await pc.setLocalDescription();
-          socket.send(JSON.stringify({ event: pc.localDescription.type, room: 'room1',from:"bot", description: pc.localDescription }));
-        }
-      } else if (candidate) {
-        try {
-          await pc.addIceCandidate(candidate);
-        } catch (err) {
-          if (!ignoreoffer) throw err; // suppress ignored offer's candidates
-        }
-      }
-    } catch (err) {
-      console.error(err);
-    }   //};
-  }
-
-  // observer setup
+  
+  // stream switcher
   function switchStream(videoElement){
     try {
       window.recorder.stop()
@@ -138,18 +77,19 @@
         window.stream.addTrack(track)
       });
 
+      for (const [userId, pc] of Object.entries(peerConnections)) {
+        window.stream.getTracks().forEach(track => {
+          let tracks = [];
+          pc.getSenders().forEach(element => {
+            tracks.push(element.track);
+          });
 
-      window.stream.getTracks().forEach(track => {
-        let tracks = []
-        pc.getSenders().forEach(element => {
-          tracks.push(element.track) 
+          if (!tracks.includes(track)) {
+            pc.addTrack(track, window.stream);
+          }
         });
-
-        if (!tracks.includes(track)) {
-          pc.addTrack(track, window.stream)
-        }
-      });
-      console.log("Finished adding tracks to pc")
+        console.log(`Finished adding tracks to pc for room: ${userId}`);
+      }
 
       //recorder setup
       let recorder = new MediaRecorder(window.stream,{mimeType:"video/mp4"})
@@ -177,10 +117,92 @@
     } catch (e) {
       console.warn("handleSpotlightError: ",e)  
     }
-
-
-
   }
+
+  // sets pc to be global variable so that future ice candidates can access it. If another connection is made, this will break the initial connection though
+  function createNewPeerConnection(fromId,roomId) {
+    const pc = new RTCPeerConnection(configuration);
+    peerConnections[fromId] = pc;
+
+    pc.to = fromId
+    pc.makingOffer = false;
+    pc.ignoreOffer = false;
+    pc.isSettingRemoteAnswerPending = false;
+
+    pc.onicecandidate = ({ candidate }) => {
+      socket.send(JSON.stringify({ event: 'candidate', room: roomId, to:pc.to, from: "bot", candidate }));
+    };
+
+    console.log("set onicecandidate")
+    pc.onnegotiationneeded = async () => {
+      console.log("negotiation needed")
+      try {
+        pc.makingOffer = true;
+        await pc.setLocalDescription();
+        socket.send(JSON.stringify({ event: pc.localDescription.type, room: roomId, to:pc.to, from: "bot", description: pc.localDescription }));
+
+      } catch (err) {
+        console.error(err);
+      } finally {
+        pc.makingOffer = false;
+      }
+    };
+
+    video_elements = document.querySelectorAll("video")  //delaying loop. Sometimes streams can take some time to switch
+    console.dir(video_elements)
+    video_elements.forEach(element => {
+      if (element.offsetParent != null || element.style.display != "none") {
+        switchStream(element)
+      } 
+    });
+  }
+
+  socket.onmessage = async ({data}) => {
+    const message = JSON.parse(data);
+    console.log(message)
+    const {event, description, candidate, from, room, to} = message;
+    try {
+      if (to != "bot") return
+      if (event == "livestream") {
+        console.log("livestream received")
+        createNewPeerConnection(from, room) 
+      }
+      else {
+        const pc = window.peerConnections[from]
+        if (!pc) return;
+        if (description) {
+          // an offer may come in while we are busy processing srd(answer).
+          // in this case, we will be in "stable" by the ime the offer is processed
+          // so it is safe to chain it on our operations chain now.
+          const readyforoffer =
+            !pc.makingoffer &&
+            (pc.signalingstate == "stable" || pc.issettingremoteanswerpending);
+          const offercollision = description.type == "offer" && !readyforoffer;
+
+          ignoreoffer = !polite && offercollision;
+          if (ignoreoffer) {
+            return;
+          }
+          pc.issettingremoteanswerpending = description.type == "answer";
+          await pc.setRemoteDescription(description); // srd rolls back as needed
+          pc.issettingremoteanswerpending = false;
+          if (description.type == "offer") {
+            await pc.setLocalDescription();
+            socket.send(JSON.stringify({ event: pc.localDescription.type, room: 'room1',from:"bot",to:pc.to, description: pc.localDescription }));
+          }
+        } else if (candidate) {
+          try {
+            await pc.addIceCandidate(candidate);
+          } catch (err) {
+            if (!ignoreoffer) throw err; // suppress ignored offer's candidates
+          }
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }   //};
+  }
+
   // Function to be executed when the grandchild element appears
   //
   let switchTimer;
@@ -225,7 +247,6 @@
   };
   const targetNode = document.querySelector('[jsname="E2KThb"]');
   observer.observe(targetNode,config)
-  window.observer = observer
   window.socket = socket;
 
 })();
