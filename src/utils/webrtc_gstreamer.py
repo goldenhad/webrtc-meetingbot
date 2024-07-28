@@ -1,8 +1,6 @@
 import random
 import websockets
 import asyncio
-import os
-import sys
 import json
 import argparse
 
@@ -151,7 +149,7 @@ if __name__=='__main__':
     our_id = random.randrange(10, 10000)
     # c = WebRTCClient(our_id, args.peerid, args.server)
 
-    pipeline_desc = f"ximagesrc display-name={args.display_num} startx={args.startx} starty={args.starty} endx={args.endx} endy={args.endy} ! video/x-raw,framerate=30/1 ! videoconvert ! queue ! vp8enc deadline=1 ! rtpvp8pay ! webrtcbin bundle-policy=max-bundle name=sendrecv"
+    pipeline_desc = f"ximagesrc show-pointer=false display-name={args.display_num} startx={args.startx} starty={args.starty} endx={args.endx} endy={args.endy} ! video/x-raw,framerate=30/1 ! videoconvert ! queue ! vp8enc deadline=1 ! rtpvp8pay ! webrtcbin bundle-policy=max-bundle name=sendrecv"
     # pipeline_desc = f"videotestsrc ! video/x-raw,framerate=30/1 ! videoconvert ! queue ! vp8enc deadline=1 ! rtpvp8pay ! webrtcbin bundle-policy=max-bundle name=sendrecv"
     print(args.display_num)
 

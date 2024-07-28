@@ -1,9 +1,10 @@
 # import required modules
+from datetime import datetime
 import asyncio
 import subprocess
 from uuid import uuid4
 import sys
-import websockets
+from src.utils.websocketmanager import WebsocketConnection
 import re
 from time import sleep
 from selenium import webdriver
@@ -19,91 +20,22 @@ from datetime import datetime
 from typing import Callable, List
 from pydantic import UUID4
 import json
+import threading
 
 WAIT_ADMIT_TIME = 120
+POLL_RATE = 0.3
 GSTREAMER_PATH = Path(__file__).resolve().parent / "../utils/zoom_gstreamer.py"
 
-class WebsocketConnection:
-    def __init__(self,ws_link: str) -> None:
-        self.ws_link: str = ws_link
-        self.ws = None
-        self.analysing_sent: bool = False
-        self.room_joined: bool = False
-        self.connected: bool = False
-
-
-    async def connect(self):
-        self.conn = await websockets.connect(self.ws_link)
-        await self.conn.send(json.dumps({
-            'event':"join-room",
-            'room':"room1"   
-        }))
-
-    def __ws_send(self,payload: dict):
-        if self.ws != None:
-            loop = asyncio.new_event_loop()
-            loop.run_until_complete(self.ws.send(json.dumps(payload)))
-
-            
-    def join_room(self, room_id: str, start_time: datetime, inference_id: UUID4):
-        payload = {
-            "event": "join-room",
-            "data": {"roomId":room_id,"startTime": start_time, "inferenceId": inference_id}
-        }
-        if not self.room_joined:
-            self.__ws_send(payload)
-
-    def send_transcription(self, name: str, content: str, start: datetime, end: datetime):
-        payload = {
-            "event": "transcription",
-            "data": {"name":name,"content": content, "timeStamps": {
-                "start": start,
-                "end": end
-            }}
-        }
-        self.__ws_send(payload)
-
-    def bot_error(self):
-        payload = {
-            "event": "extension-bot-error"
-        }
-        self.__ws_send(payload)
-
-
-    def send_analysing(self, meeting_id: str, inference_id: UUID4, rtmp_url: str = ""):
-        payload = {
-            "event": "analysing",
-            "data": {
-                "meetingId": meeting_id,
-                "inferenceId": inference_id,
-                "rtmpUrl": rtmp_url,
-            }
-        }
-        if not self.analysing_sent:
-            self.__ws_send(payload)
-            self.analysing_sent = True
-
-    def send_participants(self, participants: List[str]):
-        payload = {
-            "event": "participants",
-            "data": participants
-        }
-        self.__ws_send(payload)
-
-    def send_subject(self, subject: str):
-        payload = {
-            "event": "subject",
-            "data": subject
-        }
-        self.__ws_send(payload)
-
-    def close(self):
-        if self.ws != None:
-            self.ws.close()
-            self.connected = False
 
 class ZoomMeet:
-    def __init__(self, meeting_link, xvfb_display, ws_link, meeting_id, zoom_email="", zoom_password=""):
+    def __init__(self,
+                 meeting_link,
+                 xvfb_display,
+                 ws_link,
+                 meeting_id,
+                 zoom_email="",
+                 zoom_password=""):
+        self.participant_list = []
         self.zoom_email = zoom_email
         self.zoom_password = zoom_password
         self.xvfb_display = xvfb_display
@@ -113,6 +45,8 @@ class ZoomMeet:
         self.inference_id = uuid4()
         self.scraping_section_ids = {}
         self.websocket = WebsocketConnection(ws_link)
+        self.timer = None
+        self.timer_running = False
 
         # create chrome instance
         opt = Options()
@@ -127,18 +61,35 @@ class ZoomMeet:
             "profile.default_content_setting_values.notifications": 1
         })
         self.driver = webdriver.Chrome(options=opt)
-        self.socket = WebsocketConnection(ws_link)
 
+    def start_timer(self, interval, func):
+        # Cancel any existing timer before starting a new one
+        if self.timer_running:
+            self.cancel_timer()
+        
+        print("Starting timer...")
+        self.timer = threading.Timer(interval, func)
+        self.timer.start()
+        self.timer_running = True
+
+    def cancel_timer(self):
+        if self.timer is not None:
+            print("Cancelling timer...")
+            self.timer.cancel()
+            self.timer_running = False
+
+    def is_timer_running(self):
+        return self.timer_running
     async def loop(self):
-        async for message in self.websocket.conn:    
-            msg: dict = json.loads(message)
-            print(msg)
-            event = msg["event"]
+        message = await self.websocket.conn.recv()    
+        msg: dict = json.loads(message)
+        print(msg)
+        event = msg["event"]
 
-            if event == "select-subject":
-                print("need to call pin participant")
-                self.pin_participant(msg['data'])
-                print("finished pin participant func")
+        if event == "select-subject":
+            print("need to call pin participant")
+            self.pin_participant(msg['data'])
+            print("finished pin participant func")
         return 0
 
     def join_meeting(self):
@@ -195,7 +146,7 @@ class ZoomMeet:
 
         # Click the more button twice. zoom issue
         more_button.click()
-        sleep(5)
+        sleep(2)
         more_button.click()
 
         self.driver.find_element(By.XPATH, '//a[@aria-label="Settings"]').click()
@@ -211,7 +162,7 @@ class ZoomMeet:
         more_button = self.driver.find_element(By.ID, 'moreButton')
         # Click the more button twice. zoom issue
         more_button.click()
-        sleep(5)
+        sleep(2)
         more_button.click()
 
         try:
@@ -231,22 +182,21 @@ class ZoomMeet:
 
         # need to click twice. Zoom bug
         self.driver.find_element(By.XPATH, '//div[@feature-type="participant"]').click()
-        sleep(5)
+        sleep(2)
         self.driver.find_element(By.XPATH, '//div[@feature-type="participant"]').click()
 
-        sleep(5) # give some time for the viewport to adjust before getting coords
+        sleep(2) # give some time for the viewport to adjust before getting coords
 
         panel_height = self.driver.execute_script('return window.outerHeight - window.innerHeight;')
 
         height, width, x, y = self.driver.find_element(By.XPATH,"//div[@class='speaker-active-container__video-frame']").rect.values()
         y += panel_height
-
         self.height = height
         self.width = width 
         self.x = x
         self.y = y
 
-        self.socket.send_analysing(
+        self.websocket.send_analysing(
             self.meeting_id,
             self.inference_id
         )
@@ -269,6 +219,12 @@ class ZoomMeet:
 
         self.websocket.send_analysing(self.meeting_id,self.inference_id)
         print("ran gstreamer")
+
+    def exit_func(self):
+
+        self.driver.quit()
+        self.driver = None
+        print("should quit")
 
     def pin_participant(self, participant_name) -> None:
         print("pin called")
@@ -355,26 +311,66 @@ class ZoomMeet:
 
         for subtitle_container in subtitles:
             scraping_id = subtitle_container.get_attribute("scraping-id")
+            print("scraping id = ", end=":")
+            print(scraping_id)
             if scraping_id != None:
                 if scraping_id not in self.scraping_section_ids.keys():
                     self.scraping_section_ids[scraping_id] = subtitle_container.text
                 elif subtitle_container.text != self.scraping_section_ids[scraping_id]:
+                    self.websocket.send_transcription(
+                        "",
+                        subtitle_container.text,
+                        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    )
                     pass # send to backend
             else:
                 generated_scraping_id = str(uuid4()) 
                 self.driver.execute_script("arguments[0].setAttribute('scraping-id',arguments[1]);",subtitle_container,generated_scraping_id)
                 self.scraping_section_ids[generated_scraping_id] = subtitle_container.text
+                self.websocket.send_transcription(
+                        "",
+                        subtitle_container.text,
+                        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    )
+
+    def get_participants(self):
+        updated = False
+        participant_list = self.driver.find_elements(By.XPATH,"//div[@class='participants-item-position']")
+        if len(participant_list) < 3:
+            if not self.is_timer_running():
+                self.start_timer(30,self.exit_func)
+        elif self.is_timer_running():
+            self.cancel_timer()
+
+        for element in participant_list:
+            name = element.find_element(By.XPATH,".//span[@class='participants-item__display-name']").text
+            if name not in self.participant_list:
+                self.participant_list.append(name)
+                updated = True
+        if updated:
+            self.websocket.send_participants(self.participant_list)
 
 if __name__ == "__main__":
-    args = sys.argv[1:]
+    try:
+        args = sys.argv[1:]
+        zoom = ZoomMeet(args[0], # meeting url
+                        args[1], # xvfb numner 
+                        args[2], # ws_link 
+                        args[3], # meeting_id
+                        )
+        print("ran")
+        zoom.join_meeting()
+        zoom.record_and_stream()
+        asyncio.get_event_loop().run_until_complete(zoom.websocket.connect())
+        while True:
+            zoom.get_latest_transcriptions()
+            zoom.get_participants()
+            sleep(POLL_RATE)
 
-    zoom = ZoomMeet(args[0], # meeting url
-                    args[1], # xvfb numner 
-                    args[2], # ws_link 
-                    args[3], # meeting_id
-                    )
-    print("ran")
-    zoom.join_meeting()
-    zoom.record_and_stream()
-    asyncio.get_event_loop().run_until_complete(zoom.websocket.connect())
-    res = asyncio.get_event_loop().run_until_complete(zoom.loop())
+    except Exception as e:
+        raise e
+
+
+    # Main event loop for zoombot

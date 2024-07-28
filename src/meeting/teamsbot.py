@@ -1,3 +1,9 @@
+import asyncio
+import sys
+import json
+from uuid import uuid4
+import threading
+import websockets
 from pathlib import Path
 from time import sleep
 from selenium import webdriver
@@ -14,6 +20,7 @@ from os import environ
 from src.utils.websocketmanager import WebsocketConnection
 from src.utils.constants import OUTLOOK_PWD, OUTLOOK, BOT_NAME, TEAMS_URL
 
+POLL_RATE = 0.3
 LIVESTREAM_SCRIPT_PATH = Path(__file__).resolve().parent / "../utils/teams_bot_script.js"
 WEBSOCKET_SCRIPT_PATH = Path(__file__).resolve().parent / "../utils/WebsocketManager.js"
 AUX_UTILS_SCRIPT_PATH = Path(__file__).resolve().parent / "../utils/aux_utils.js"
@@ -22,35 +29,76 @@ TRANSCRIPT_SCRIPT_PATH = Path(__file__).resolve().parent / "../utils/teams_trans
 
 
 
-class TeamsMeet:
-    def __init__(self, meeting_link: str, ws_url: str):
-        self.mail_address: str = OUTLOOK
-        self.password: str = OUTLOOK_PWD
-        self.ws = WebsocketConnection(ws_url)
-        self.ws.connect(self.handle_onmessage)
+class TeamsMeet: 
+    def __init__(self,
+                 meeting_link,
+                 xvfb_display,
+                 ws_link,
+                 meeting_id,
+                 teams_mail=OUTLOOK,
+                 teams_pw=OUTLOOK_PWD):
+        self.participant_list = []
+        self.mail_address = teams_mail
+        self.password = teams_pw
+        self.xvfb_display = xvfb_display
+        self.botname = "BotAssistant"  
+        self.meeting_id = meeting_id
+        self.meeting_link = meeting_link
+        self.inference_id = uuid4()
+        self.scraping_section_ids = {}
+        self.websocket = WebsocketConnection(ws_link)
+        self.timer = None
+        self.timer_running = False
 
         # create chrome instance
         opt = Options()
         opt.add_argument('--disable-blink-features=AutomationControlled')
         opt.add_argument('--start-maximized')
-        # opt.add_argument('--use-data-dir=chrome-data')
-        opt.add_experimental_option(
-            "prefs",
-            {
-                "profile.default_content_setting_values.media_stream_mic": 1,
-                "profile.default_content_setting_values.media_stream_camera": 1,
-                "profile.default_content_setting_values.geolocation": 0,
-                "profile.default_content_setting_values.notifications": 1,
-            },
-        )
-        self.driver: WebDriver = webdriver.Chrome(options=opt)
-        self.meeting_link: str = meeting_link
+        # opt.add_argument("--no-sandbox");
+        # opt.add_argument("--disable-dev-shm-usage");
+        opt.add_experimental_option("prefs", {
+            "profile.default_content_setting_values.media_stream_mic": 1,
+            "profile.default_content_setting_values.media_stream_camera": 1,
+            "profile.default_content_setting_values.geolocation": 0,
+            "profile.default_content_setting_values.notifications": 1
+        })
+        self.driver = webdriver.Chrome(options=opt)
 
-    def handle_onmessage(self, message):
-        """Websocket onmessage handler"""
-        print(message)
+    def start_timer(self, interval, func):
+        # Cancel any existing timer before starting a new one
+        if self.timer_running:
+            self.cancel_timer()
+        
+        print("Starting timer...")
+        self.timer = threading.Timer(interval, func)
+        self.timer.start()
+        self.timer_running = True
 
+    def cancel_timer(self):
+        if self.timer is not None:
+            print("Cancelling timer...")
+            self.timer.cancel()
+            self.timer_running = False
 
+    def is_timer_running(self):
+        return self.timer_running
+    async def loop(self):
+        message = await self.websocket.conn.recv()    
+        msg: dict = json.loads(message)
+        print(msg)
+        event = msg["event"]
+
+        if event == "select-subject":
+            print("need to call pin participant")
+            self.pin_participant(msg['data'])
+            print("finished pin participant func")
+        return 0
+    def pin_participant(self,paritipant_name):
+        pass
+    def get_latest_transcriptions(self):
+        pass
+    def get_participants(self):
+        pass
     def tlogin(self):
         """
         Old login code. Unreliable. Sometimes will fail. Do not use.
@@ -102,12 +150,12 @@ class TeamsMeet:
             self.driver.switch_to.frame(experience_container_iframe)
 
         if "DEV" in environ:
-
+            pass
             # Headless instances don't have mic and camera anyway. So don't need to worry about this
-            self.driver.find_element(By.XPATH,'//div[@title="Microphone"]/div').click()
-            cam = self.driver.find_element(By.XPATH,'//div[@title="Camera"]/div')
-            sleep(5) # wait for camera to be available
-            cam.click()
+            # self.driver.find_element(By.XPATH,'//div[@title="Microphone"]/div').click()
+            # cam = self.driver.find_element(By.XPATH,'//div[@title="Camera"]/div')
+            # sleep(5) # wait for camera to be available
+            # cam.click()
 
         # Get the button with id "prejoin-join-button"
         input_element = self.driver.find_element(By.XPATH, '//input[@type="text"][@placeholder="Type your name"]')
@@ -130,7 +178,7 @@ class TeamsMeet:
             print("Failed to join the meeting")
 
 
-    def record_and_capture(self ):
+    def record_and_stream(self ):
         """Creates WebRTC connection and start recording the spotlighted participant"""
         try:
             self.driver.implicitly_wait(10)
@@ -165,5 +213,22 @@ class TeamsMeet:
             print("Unexpected error")
 
 
+if __name__ == "__main__":
+    try:
+        args = sys.argv[1:]
+        teams = TeamsMeet(args[0], # meeting url
+                        args[1], # xvfb numner 
+                        args[2], # ws_link 
+                        args[3], # meeting_id
+                        )
+        print("ran")
+        teams.join_meeting()
+        teams.record_and_stream()
+        asyncio.get_event_loop().run_until_complete(teams.websocket.connect())
+        while True:
+            teams.get_latest_transcriptions()
+            teams.get_participants()
+            sleep(POLL_RATE)
 
-
+    except Exception as e:
+        raise e

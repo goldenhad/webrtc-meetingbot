@@ -1,26 +1,29 @@
 from datetime import datetime
 from typing import Callable, List
 from pydantic import UUID4
-from websocket import WebSocket
+import websockets
 import json
 
 class WebsocketConnection:
     def __init__(self,ws_link: str) -> None:
         self.ws_link: str = ws_link
-        self.ws: WebSocket | None = None
         self.analysing_sent: bool = False
         self.room_joined: bool = False
         self.connected: bool = False
 
-
-    def connect(self, on_message: Callable):
-        if self.ws != None and not self.connected:
-            self.ws.connect(self.ws_link, on_message = on_message)
+    async def connect(self):
+        self.conn = await websockets.connect(self.ws_link)
+        await self.conn.send(json.dumps({
+            'event':"join-room",
+            'room':"room1"   
+        }))
 
     def __ws_send(self,payload: dict):
-        if self.ws != None:
-            self.ws.send(json.dumps(payload))
+        if self.conn != None:
+            loop = asyncio.new_event_loop()
+            loop.run_until_complete(self.conn.send(json.dumps(payload)))
 
+            
     def join_room(self, room_id: str, start_time: datetime, inference_id: UUID4):
         payload = {
             "event": "join-room",
@@ -73,10 +76,6 @@ class WebsocketConnection:
         }
         self.__ws_send(payload)
 
-    def close(self):
-        if self.ws != None:
-            self.ws.close()
-            self.connected = False
 
              
 

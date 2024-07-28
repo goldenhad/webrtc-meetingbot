@@ -59,11 +59,15 @@
   function switchStream(videoElement){
     try {
       window.recorder.stop()
-      pc.getSenders().forEach(sender =>{
-        if (sender.track == window.stream.getVideoTracks()[0]) { //only 1 video track is sent. That's how we're sure about this
-          pc.removeTrack(sender) 
-        }
-      })
+
+      for (const [userId, pc] of Object.entries(peerConnections)) {
+        pc.getSenders().forEach(sender =>{
+          if (sender.track == window.stream.getVideoTracks()[0]) { //only 1 video track is sent. That's how we're sure about this
+            pc.removeTrack(sender) 
+          }
+        })
+        console.log(`Finished removing track for ${userId}`);
+      }
       window.stream.removeTrack(window.stream.getVideoTracks()[0])
     } catch (e) {
       console.dir(e)

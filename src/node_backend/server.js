@@ -33,7 +33,7 @@ wss.on('connection', (ws) => {
         if (rooms[data.room]) {
           rooms[data.room].forEach(client => {
             if (client !== ws) {
-              console.log(data)
+              //console.log(data)
               client.send(JSON.stringify(data));
             }
           });

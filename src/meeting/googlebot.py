@@ -1,6 +1,10 @@
+import sys
+import asyncio
 from os import environ
+import threading
 from time import sleep
 from pathlib import Path
+from uuid import uuid4
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
@@ -11,6 +15,7 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from src.utils.constants import GMAIL, GMAIL_PWD
 from src.utils.websocketmanager import WebsocketConnection
 
+POLL_RATE = 0.2
 LIVESTREAM_SCRIPT_PATH = Path(__file__).resolve().parent / "../utils/google_bot_script.js"
 WEBSOCKET_SCRIPT_PATH = Path(__file__).resolve().parent / "../utils/WebsocketManager.js"
 TRANSCRIPT_SCRIPT_PATH = Path(__file__).resolve().parent / "../utils/google_transcripts.js"
@@ -19,16 +24,24 @@ AUX_UTILS_SCRIPT_PATH = Path(__file__).resolve().parent / "../utils/aux_utils.js
 
 
 class GoogleMeet:
-    def __init__(self, meeting_link: str, ws_url: str):
+    def __init__(self, meeting_link, xvfb_display, ws_link, meeting_id):
         self.mail_address = GMAIL
         self.password = GMAIL_PWD
         self.meeting_link = meeting_link
-        self.ws = WebsocketConnection(ws_url)
-        self.ws.connect(self.handle_onmessage)
+        self.participant_list = []
+        self.inference_id = uuid4()
+        self.scraping_secion_ids = {}
+        self.websocket = WebsocketConnection(ws_link)
+        self.participant_list = []
+        self.xvfb_display = xvfb_display
+        self.meeting_id = meeting_id
+        self.timer = None
+        self.timer_running = False
         # Create Chrome instance
         opt = Options()
         opt.add_argument('--disable-blink-features=AutomationControlled')
         opt.add_argument('--start-maximized')
+
         opt.add_experimental_option("prefs", {
             "profile.default_content_setting_values.media_stream_mic": 1,
             "profile.default_content_setting_values.media_stream_camera": 1,
@@ -36,9 +49,50 @@ class GoogleMeet:
         })
         self.driver = webdriver.Chrome(options=opt)
 
-    def handle_onmessage(self,message):
-        """Websocket onmessage handler""" 
-        print(message)
+    def start_timer(self, interval, func):
+        # Cancel any existing timer before starting a new one
+        if self.timer_running:
+            self.cancel_timer()
+        
+        print("Starting timer...")
+        self.timer = threading.Timer(interval, func)
+        self.timer.start()
+        self.timer_running = True
+
+    def cancel_timer(self):
+        if self.timer is not None:
+            print("Cancelling timer...")
+            self.timer.cancel()
+            self.timer_running = False
+
+    def is_timer_running(self):
+        return self.timer_running
+    async def loop(self):
+        message = await self.websocket.conn.recv()    
+        msg: dict = json.loads(message)
+        print(msg)
+        event = msg["event"]
+
+        if event == "select-subject":
+            print("need to call pin participant")
+            self.pin_participant(msg['data'])
+            print("finished pin participant func")
+        return 0
+        
+    def exit_func(self):
+
+        self.driver.quit()
+        self.driver = None
+        print("should quit")
+
+    def pin_participant(self,participant_name):
+        pass
+
+    def get_latest_transcription(self):
+        pass
+
+    def get_participants(self):
+        pass
 
     def glogin(self):
 
@@ -130,3 +184,23 @@ class GoogleMeet:
             # TODO: Add support to send the socket error
             pass
 
+if __name__ == "__main__":
+
+    args = sys.argv[1:]
+    google = GoogleMeet(
+        # "https://meet.google.com/zjv-imfz-rty",
+        # "ws://localhost:7000"
+        args[0], # meeting url
+        args[1], # xvfb numner 
+        args[2], # ws_link 
+        args[3], # meeting_id
+        )
+    google.glogin()
+    google.join_meeting()
+    google.record_and_stream(300)
+    asyncio.get_event_loop().run_until_complete(zoom.websocket.connect())
+    while True:
+        google.get_latest_transcription()
+        google.get_participants()
+        sleep(POLL_RATE)
+    sleep(120)
