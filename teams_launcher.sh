@@ -1,0 +1,2 @@
+#!/bin/sh 
+xvfb-run --listen-tcp --server-num=76 --auth-file=/tmp/xvfb.auth -s "-ac -screen 0 1920x1080x24" python -m src.meeting.teamsbot https://teams.microsoft.com/l/meetup-join/19:meeting_M2YxOWRkZTYtMzVlNi00MTA1LWIzZmYtMGE1YzY0ZDg1NWQ0@thread.v2/0?context=%7B%22Tid%22:%22f9fedb8b-e219-4e87-b744-b3e1a7b830da%22,%22Oid%22:%228fb72fed-b5fd-43f9-9dbd-f0c102b3cb03%22%7D 76 ws://localhost:7000 testid

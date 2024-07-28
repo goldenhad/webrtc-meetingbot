@@ -1,16 +1,20 @@
-import random
-import websockets
+import argparse
 import asyncio
 import json
-import argparse
+import random
 
 import gi
+import websockets
+
 gi.require_version('Gst', '1.0')
 from gi.repository import Gst
+
 gi.require_version('GstWebRTC', '1.0')
 from gi.repository import GstWebRTC
+
 gi.require_version('GstSdp', '1.0')
 from gi.repository import GstSdp
+
 
 # PIPELINE_DESC = '''
 # ximagesrc display-name=:44 ! video/x-raw,framerate=30/1 ! videoconvert ! queue ! vp8enc deadline=1 ! rtpvp8pay ! webrtcbin bundle-policy=max-bundle name=sendrecv 
@@ -30,26 +34,25 @@ class WebRTCClient:
         self.polite = True
         self.clients = {}
 
-
     async def connect(self):
 
         self.conn = await websockets.connect(self.server)
         await self.conn.send(json.dumps({
-            'event':"join-room",
-            'room':"room1"   
+            'event': "join-room",
+            'room': "room1"
         }))
 
     def send_sdp_offer(self, offer):
         text = offer.sdp.as_text()
         # msg = json.dumps({'sdp': {'type': 'offer', 'sdp': text}})
         msg = json.dumps({
-            "event":"offer",
-            "room":"room1",
-            "from":"bot",
-            "to":self.clientId,
-            "description":{
-                'type':'offer',
-                'sdp':text
+            "event": "offer",
+            "room": "room1",
+            "from": "bot",
+            "to": self.clientId,
+            "description": {
+                'type': 'offer',
+                'sdp': text
             }
         })
         loop = asyncio.new_event_loop()
@@ -72,11 +75,11 @@ class WebRTCClient:
 
     def send_ice_candidate_message(self, _, mlineindex, candidate):
         icemsg = json.dumps({
-            "event":"candidate",
-            "candidate" : {'candidate': candidate, 'sdpMLineIndex': mlineindex},
-            "room":"room1",
-            "from":"bot",
-            "to":self.clientId
+            "event": "candidate",
+            "candidate": {'candidate': candidate, 'sdpMLineIndex': mlineindex},
+            "room": "room1",
+            "from": "bot",
+            "to": self.clientId
         })
         loop = asyncio.new_event_loop()
         loop.run_until_complete(self.conn.send(icemsg))
@@ -87,20 +90,19 @@ class WebRTCClient:
         self.webrtc.connect('on-negotiation-needed', self.on_negotiation_needed)
         self.webrtc.connect('on-ice-candidate', self.send_ice_candidate_message)
         self.webrtc.set_property("stun-server", "stun://stun.relay.metered.ca:80")
-        self.webrtc.emit('add-turn-server',"turn://2678fb1e408695c7901c6d48:z0t6BANE1JdAAXQm@global.relay.metered.ca:80")
-        self.webrtc.emit('add-turn-server',"turn://2678fb1e408695c7901c6d48:z0t6BANE1JdAAXQm@global.relay.metered.ca:443")
+        self.webrtc.emit('add-turn-server',
+                         "turn://2678fb1e408695c7901c6d48:z0t6BANE1JdAAXQm@global.relay.metered.ca:80")
+        self.webrtc.emit('add-turn-server',
+                         "turn://2678fb1e408695c7901c6d48:z0t6BANE1JdAAXQm@global.relay.metered.ca:443")
         self.pipe.set_state(Gst.State.PLAYING)
 
     async def handle_sdp(self, message):
-        print("handling sdp")
         assert (self.webrtc)
         msg = json.loads(message)
-        print(msg)
         if 'description' in msg:
             sdp = msg['description']
-            assert(sdp['type'] == 'answer')
+            assert (sdp['type'] == 'answer')
             sdp = sdp['sdp']
-            print ('Received answer:\n%s' % sdp)
             res, sdpmsg = GstSdp.SDPMessage.new()
             GstSdp.sdp_message_parse_buffer(bytes(sdp.encode()), sdpmsg)
             answer = GstWebRTC.WebRTCSessionDescription.new(GstWebRTC.WebRTCSDPType.ANSWER, sdpmsg)
@@ -122,7 +124,7 @@ class WebRTCClient:
             event = msg["event"]
             to = msg["to"] if "to" in msg.keys() else ""
             fromMsg = msg["from"] if "from" in msg.keys() else ""
-            
+
             if to != "bot":
                 continue
             if event == "livestream":
@@ -135,8 +137,7 @@ class WebRTCClient:
         return 0
 
 
-
-if __name__=='__main__':
+if __name__ == '__main__':
     Gst.init(None)
     parser = argparse.ArgumentParser()
     # parser.add_argument('peerid', help='String ID of the peer to connect to')

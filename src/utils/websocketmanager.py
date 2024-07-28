@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime
 from typing import Callable, List
 from pydantic import UUID4
@@ -27,7 +28,7 @@ class WebsocketConnection:
     def join_room(self, room_id: str, start_time: datetime, inference_id: UUID4):
         payload = {
             "event": "join-room",
-            "data": {"roomId":room_id,"startTime": start_time, "inferenceId": inference_id}
+            "data": {"roomId":room_id,"startTime": start_time, "inferenceId": str(inference_id)}
         }
         if not self.room_joined:
             self.__ws_send(payload)
@@ -54,7 +55,7 @@ class WebsocketConnection:
             "event": "analysing",
             "data": {
                 "meetingId": meeting_id,
-                "inferenceId": inference_id,
+                "inferenceId": str(inference_id),
                 "rtmpUrl": rtmp_url,
             }
         }

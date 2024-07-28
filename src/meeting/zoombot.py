@@ -15,16 +15,13 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support import expected_conditions as EC
 from pathlib import Path
-from os import environ
 from datetime import datetime
-from typing import Callable, List
-from pydantic import UUID4
 import json
 import threading
 
 WAIT_ADMIT_TIME = 120
 POLL_RATE = 0.3
-GSTREAMER_PATH = Path(__file__).resolve().parent / "../utils/zoom_gstreamer.py"
+GSTREAMER_PATH = Path(__file__).resolve().parent / "../utils/webrtc_gstreamer.py"
 
 
 class ZoomMeet:
@@ -217,13 +214,12 @@ class ZoomMeet:
             str(y+height)
         ])
 
-        self.websocket.send_analysing(self.meeting_id,self.inference_id)
         print("ran gstreamer")
 
     def exit_func(self):
 
         self.driver.quit()
-        self.driver = None
+        # self.driver = None
         print("should quit")
 
     def pin_participant(self, participant_name) -> None:
