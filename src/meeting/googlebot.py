@@ -14,11 +14,6 @@ from src.utils.constants import GMAIL, GMAIL_PWD
 
 GSTREAMER_PATH = Path(__file__).resolve().parent / "../utils/webrtc_gstreamer.py"
 POLL_RATE = 0.2
-LIVESTREAM_SCRIPT_PATH = Path(__file__).resolve().parent / "../utils/google_bot_script.js"
-WEBSOCKET_SCRIPT_PATH = Path(__file__).resolve().parent / "../utils/WebsocketManager.js"
-TRANSCRIPT_SCRIPT_PATH = Path(__file__).resolve().parent / "../utils/google_transcripts.js"
-PARTICIPANTS_SCRIPT_PATH = Path(__file__).resolve().parent / "../utils/google_participants_and_pin.js"
-AUX_UTILS_SCRIPT_PATH = Path(__file__).resolve().parent / "../utils/aux_utils.js"
 
 
 class GoogleMeet(BotBase):
