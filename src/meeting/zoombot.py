@@ -1,49 +1,43 @@
 # import required modules
-from datetime import datetime
 import asyncio
-import subprocess
-from uuid import uuid4
-import sys
-from src.utils.websocketmanager import WebsocketConnection
+import os
+
+from dotenv import load_dotenv
+from os import environ
 import re
-from time import sleep
-from selenium import webdriver
-from selenium.webdriver.common.action_chains import ActionChains
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.support import expected_conditions as EC
-from pathlib import Path
-from datetime import datetime
-import json
+import subprocess
+import sys
 import threading
+from datetime import datetime
+from pathlib import Path
+from time import sleep
+from uuid import uuid4
+
+from selenium import webdriver
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
+
+from src.meeting.botbase import BotBase
 
 WAIT_ADMIT_TIME = 120
 POLL_RATE = 0.3
 GSTREAMER_PATH = Path(__file__).resolve().parent / "../utils/webrtc_gstreamer.py"
+load_dotenv("/home/lasan/Dev/trustlehubgit/.env")
 
 
-class ZoomMeet:
-    def __init__(self,
-                 meeting_link,
-                 xvfb_display,
-                 ws_link,
-                 meeting_id,
-                 zoom_email="",
-                 zoom_password=""):
-        self.participant_list = []
+class ZoomMeet(BotBase):
+    def __init__(self, meeting_link, xvfb_display, ws_link, meeting_id, zoom_email="", zoom_password=""):
         self.zoom_email = zoom_email
         self.zoom_password = zoom_password
-        self.xvfb_display = xvfb_display
-        self.botname = "BotAssistant"  
-        self.meeting_id = meeting_id
+        self.botname = "BotAssistant"
         self.meeting_link = meeting_link
-        self.inference_id = uuid4()
-        self.scraping_section_ids = {}
-        self.websocket = WebsocketConnection(ws_link)
-        self.timer = None
-        self.timer_running = False
+        self.transcriptions = []
+        self.last_transcription_sent = datetime.now()
+        super().__init__(ws_link, xvfb_display, meeting_id)
 
         # create chrome instance
         opt = Options()
@@ -59,36 +53,6 @@ class ZoomMeet:
         })
         self.driver = webdriver.Chrome(options=opt)
 
-    def start_timer(self, interval, func):
-        # Cancel any existing timer before starting a new one
-        if self.timer_running:
-            self.cancel_timer()
-        
-        print("Starting timer...")
-        self.timer = threading.Timer(interval, func)
-        self.timer.start()
-        self.timer_running = True
-
-    def cancel_timer(self):
-        if self.timer is not None:
-            print("Cancelling timer...")
-            self.timer.cancel()
-            self.timer_running = False
-
-    def is_timer_running(self):
-        return self.timer_running
-    async def loop(self):
-        message = await self.websocket.conn.recv()    
-        msg: dict = json.loads(message)
-        print(msg)
-        event = msg["event"]
-
-        if event == "select-subject":
-            print("need to call pin participant")
-            self.pin_participant(msg['data'])
-            print("finished pin participant func")
-        return 0
-
     def join_meeting(self):
         print(self.xvfb_display)
         print(self.meeting_link)
@@ -98,20 +62,18 @@ class ZoomMeet:
             meeting_id = re.search(r'(?<=j/)\d+', self.meeting_link).group()
         password = re.search(r'(?<=pwd=)[^&]*', self.meeting_link).group()
 
-
         self.driver.get(f"https://app.zoom.us/wc/{meeting_id}/join?pwd={password}")
 
         self.driver.maximize_window()
-        # if not hasattr(environ,"DEV"):
-        #     self.driver.implicitly_wait(10)
-        #     self.driver.find_element(By.XPATH, "//button[@id='onetrust-accept-btn-handler']").click()
-        #
-        #     self.driver.find_element(By.XPATH, '//button[@id="wc_agree1"]').click()
+        if "DEV" not in environ:
+            self.driver.implicitly_wait(10)
+            self.driver.find_element(By.XPATH, "//button[@id='onetrust-accept-btn-handler']").click()
+
+            self.driver.find_element(By.XPATH, '//button[@id="wc_agree1"]').click()
         #
 
         self.driver.implicitly_wait(60)
         self.driver.find_element(By.ID, 'input-for-name').send_keys(self.botname)
-
 
         self.driver.implicitly_wait(10)
         join_button = self.driver.find_element(By.XPATH, '//button[contains(@class, "preview-join-button")]')
@@ -120,7 +82,7 @@ class ZoomMeet:
         sleep(5)
         join_button.click()
 
-        #waiting till joined
+        # waiting till joined
         # Wait for the SVG with class "SvgShare" to appear
         self.driver.implicitly_wait(WAIT_ADMIT_TIME)
         self.driver.find_element(By.CLASS_NAME, 'SvgShare')
@@ -148,11 +110,10 @@ class ZoomMeet:
 
         self.driver.find_element(By.XPATH, '//a[@aria-label="Settings"]').click()
 
-
         meeting_controls = self.driver.find_element(By.XPATH, '//div[text()="Always show meeting controls"]/..')
         if meeting_controls.get_attribute("aria-checked") != "true":
             meeting_controls.click()
-            
+
         self.driver.find_element(By.XPATH, '//button[contains(@class,"zm-btn settings-dialog__close")]').click()
 
         # enable close captions
@@ -163,33 +124,33 @@ class ZoomMeet:
         more_button.click()
 
         try:
-            self.driver.find_element(By.XPATH,"//a[text()='Captions']").click()
-            self.driver.find_element(By.XPATH,"//a[text()='Show Captions']").click()
+            self.driver.find_element(By.XPATH, "//a[text()='Captions']").click()
+            self.driver.find_element(By.XPATH, "//a[text()='Show Captions']").click()
         except Exception as e:
             print(e)
-            
+
         print("Joined to meeting")
 
     def record_and_stream(self):
-        self.driver.implicitly_wait(10)  
-        self.driver.find_element(By.XPATH,"//span[text()='View']").click()
+        self.driver.implicitly_wait(10)
+        self.driver.find_element(By.XPATH, "//span[text()='View']").click()
 
-        self.driver.find_element(By.XPATH,"//a[text()='Speaker View']").click()
-
+        self.driver.find_element(By.XPATH, "//a[text()='Speaker View']").click()
 
         # need to click twice. Zoom bug
         self.driver.find_element(By.XPATH, '//div[@feature-type="participant"]').click()
         sleep(2)
         self.driver.find_element(By.XPATH, '//div[@feature-type="participant"]').click()
 
-        sleep(2) # give some time for the viewport to adjust before getting coords
+        sleep(2)  # give some time for the viewport to adjust before getting coords
 
         panel_height = self.driver.execute_script('return window.outerHeight - window.innerHeight;')
 
-        height, width, x, y = self.driver.find_element(By.XPATH,"//div[@class='speaker-active-container__video-frame']").rect.values()
+        height, width, x, y = self.driver.find_element(By.XPATH,
+                                                       "//div[@class='speaker-active-container__video-frame']").rect.values()
         y += panel_height
         self.height = height
-        self.width = width 
+        self.width = width
         self.x = x
         self.y = y
 
@@ -209,48 +170,42 @@ class ZoomMeet:
             "--starty",
             str(y),
             "--endx",
-            str(x+width),
+            str(x + width),
             "--endy",
-            str(y+height)
+            str(y + height)
         ])
 
         print("ran gstreamer")
-
-    def exit_func(self):
-
-        self.driver.quit()
-        # self.driver = None
-        print("should quit")
 
     def pin_participant(self, participant_name) -> None:
         print("pin called")
         print(participant_name)
         try:
-            
+
             self.driver.implicitly_wait(5)
             self.driver.find_element(By.XPATH, '//div[contains(@class,"participants-section-container")]')
             search_available = True
             participant_search = None
             try:
-                participant_search = self.driver.find_element(By.XPATH, '//input[contains(@class,"participants-search-box__input")]')
+                participant_search = self.driver.find_element(By.XPATH,
+                                                              '//input[contains(@class,"participants-search-box__input")]')
             except:
                 search_available = False
 
-
             if search_available and participant_search != None:
                 print("search available")
-                participant_search.send_keys(100*"\b")
+                participant_search.send_keys(100 * "\b")
                 participant_search.send_keys(participant_name)
-                participant_list = self.driver.find_elements(By.XPATH,"//div[@class='participants-item-position']")
+                participant_list = self.driver.find_elements(By.XPATH, "//div[@class='participants-item-position']")
                 for element in participant_list:
                     # its ok to just loop through this. Search has already filterd it out
 
                     ActionChains(self.driver).move_to_element(element).click().perform()
                     sleep(3)
-                    more_button = element.find_element(By.XPATH,".//span[text()='More']")
-                    
-                    self.driver.implicitly_wait(0) # remove implicit wait before setting explicit. Should not mix both
-                    WebDriverWait(self.driver,5).until(
+                    more_button = element.find_element(By.XPATH, ".//span[text()='More']")
+
+                    self.driver.implicitly_wait(0)  # remove implicit wait before setting explicit. Should not mix both
+                    WebDriverWait(self.driver, 5).until(
                         EC.element_to_be_clickable(more_button)
                     )
                     more_button.click()
@@ -265,21 +220,22 @@ class ZoomMeet:
                     except Exception as e:
                         print("add / replace pin button not found")
                         print(e)
-                participant_search.send_keys(len(participant_name)*"\b")
+                participant_search.send_keys(len(participant_name) * "\b")
             else:
                 print("no search available")
-                participant_list = self.driver.find_elements(By.XPATH,"//div[@class='participants-item-position']")
+                participant_list = self.driver.find_elements(By.XPATH, "//div[@class='participants-item-position']")
                 for element in participant_list:
-                    name = element.find_element(By.XPATH,".//span[@class='participants-item__display-name']").text
+                    name = element.find_element(By.XPATH, ".//span[@class='participants-item__display-name']").text
                     print(name)
-                    if name in  participant_name:
+                    if name in participant_name:
                         print("name in participant name")
                         ActionChains(self.driver).move_to_element(element).click().perform()
                         sleep(1)
-                        more_button = element.find_element(By.XPATH,".//span[text()='More']")
+                        more_button = element.find_element(By.XPATH, ".//span[text()='More']")
 
-                        self.driver.implicitly_wait(0) # remove implicit wait before setting explicit. Should not mix both
-                        WebDriverWait(self.driver,5).until(
+                        self.driver.implicitly_wait(
+                            0)  # remove implicit wait before setting explicit. Should not mix both
+                        WebDriverWait(self.driver, 5).until(
                             EC.element_to_be_clickable(more_button)
                         )
                         more_button.click()
@@ -302,71 +258,58 @@ class ZoomMeet:
 
     def get_latest_transcriptions(self):
         self.driver.implicitly_wait(10)
-        cc_box = self.driver.find_element(By.XPATH,"//div[contains(@class,'live-transcription-subtitle__box')]")
-        subtitles = cc_box.find_elements(By.ID,'live-transcription-subtitle') 
+        cc_box = self.driver.find_element(By.XPATH, "//div[contains(@class,'live-transcription-subtitle__box')]")
+        subtitles = cc_box.find_elements(By.ID, 'live-transcription-subtitle')
 
         for subtitle_container in subtitles:
-            scraping_id = subtitle_container.get_attribute("scraping-id")
-            print("scraping id = ", end=":")
-            print(scraping_id)
-            if scraping_id != None:
-                if scraping_id not in self.scraping_section_ids.keys():
-                    self.scraping_section_ids[scraping_id] = subtitle_container.text
-                elif subtitle_container.text != self.scraping_section_ids[scraping_id]:
-                    self.websocket.send_transcription(
-                        "",
-                        subtitle_container.text,
-                        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    )
-                    pass # send to backend
-            else:
-                generated_scraping_id = str(uuid4()) 
-                self.driver.execute_script("arguments[0].setAttribute('scraping-id',arguments[1]);",subtitle_container,generated_scraping_id)
-                self.scraping_section_ids[generated_scraping_id] = subtitle_container.text
+            text = subtitle_container.text
+            if text not in self.transcriptions:
+                self.transcriptions.append(text)
                 self.websocket.send_transcription(
-                        "",
-                        subtitle_container.text,
-                        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    )
-
+                    "",
+                    text,
+                    self.last_transcription_sent,
+                    datetime.now()
+                    
+                )
+                self.last_transcription_sent = datetime.now()
     def get_participants(self):
         updated = False
-        participant_list = self.driver.find_elements(By.XPATH,"//div[@class='participants-item-position']")
+        participant_list = self.driver.find_elements(By.XPATH, "//div[@class='participants-item-position']")
         if len(participant_list) < 3:
             if not self.is_timer_running():
-                self.start_timer(30,self.exit_func)
+                self.start_timer(30, self.exit_func)
         elif self.is_timer_running():
             self.cancel_timer()
 
         for element in participant_list:
-            name = element.find_element(By.XPATH,".//span[@class='participants-item__display-name']").text
+            name = element.find_element(By.XPATH, ".//span[@class='participants-item__display-name']").text
             if name not in self.participant_list:
                 self.participant_list.append(name)
                 updated = True
         if updated:
             self.websocket.send_participants(self.participant_list)
 
+
 if __name__ == "__main__":
     try:
         args = sys.argv[1:]
-        zoom = ZoomMeet(args[0], # meeting url
-                        args[1], # xvfb numner 
-                        args[2], # ws_link 
-                        args[3], # meeting_id
+        zoom = ZoomMeet(args[0],  # meeting url
+                        args[1],  # xvfb numner 
+                        args[2],  # ws_link 
+                        args[3],  # meeting_id
                         )
         print("ran")
+        thread = threading.Thread(target=zoom.setup_ws, daemon=True)
         zoom.join_meeting()
         zoom.record_and_stream()
-        asyncio.get_event_loop().run_until_complete(zoom.websocket.connect())
         while True:
             zoom.get_latest_transcriptions()
             zoom.get_participants()
             sleep(POLL_RATE)
+            
 
     except Exception as e:
         raise e
-
 
     # Main event loop for zoombot

@@ -150,8 +150,17 @@ if __name__ == '__main__':
     our_id = random.randrange(10, 10000)
     # c = WebRTCClient(our_id, args.peerid, args.server)
 
-    pipeline_desc = f"ximagesrc show-pointer=false display-name={args.display_num} startx={args.startx} starty={args.starty} endx={args.endx} endy={args.endy} ! video/x-raw,framerate=30/1 ! videoconvert ! queue ! vp8enc deadline=1 ! rtpvp8pay ! webrtcbin bundle-policy=max-bundle name=sendrecv"
-    # pipeline_desc = f"videotestsrc ! video/x-raw,framerate=30/1 ! videoconvert ! queue ! vp8enc deadline=1 ! rtpvp8pay ! webrtcbin bundle-policy=max-bundle name=sendrecv"
+    pipeline_desc = f'''
+        ximagesrc show-pointer=false display-name={args.display_num} startx={args.startx} starty={args.starty} endx={args.endx} endy={args.endy} ! \
+        video/x-raw,framerate=30/1 ! videoconvert ! queue ! tee name=t_vid ! \
+        queue ! vp8enc deadline=1 ! rtpvp8pay ! application/x-rtp,media=video,encoding-name=VP8,payload=96 ! sendrecv. \
+        t_vid. ! queue ! vp8enc ! webmmux name=mux ! filesink location=output.webm \
+        pulsesrc device=chrome_sink.monitor ! audioconvert ! audioresample ! queue ! tee name=t_aud ! \
+        queue ! opusenc ! rtpopuspay ! application/x-rtp,media=audio,encoding-name=OPUS,payload=97 ! sendrecv. \
+        webrtcbin name=sendrecv bundle-policy=max-bundle \
+        t_aud. ! queue ! opusenc ! mux. 
+    '''
+
     print(args.display_num)
 
     c = WebRTCClient(pipeline_desc)

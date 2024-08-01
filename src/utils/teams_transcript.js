@@ -9,8 +9,6 @@
         for (const addedNode of mutation.addedNodes) {
           if (addedNode.nodeType === Node.ELEMENT_NODE && addedNode.querySelector('li[class*="ui-chat__item"]')) {
             try {
-
-
               const previousNode = addedNode.previousSibling
               // Get the descendant span with class containing "ui-chat__message__author"
               const authorSpan = previousNode.querySelector('span[class*="ui-chat__message__author"]');

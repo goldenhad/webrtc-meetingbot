@@ -1,117 +1,114 @@
-import asyncio
-import json
 import subprocess
 import sys
 import threading
+from datetime import datetime
 from os import environ
 from pathlib import Path
 from time import sleep
-from uuid import uuid4
 
-from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
-from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
-from src.utils.constants import OUTLOOK_PWD, OUTLOOK, BOT_NAME, TEAMS_URL
-# from src.meeting.googlebot import LIVESTREAM_SCRIPT_PATH
-from src.utils.websocketmanager import WebsocketConnection
+from src.meeting.botbase import BotBase
+from src.utils.constants import OUTLOOK_PWD, OUTLOOK, TEAMS_URL
 
 GSTREAMER_PATH = Path(__file__).resolve().parent / "../utils/webrtc_gstreamer.py"
 POLL_RATE = 0.3
-LIVESTREAM_SCRIPT_PATH = Path(__file__).resolve().parent / "../utils/teams_bot_script.js"
-WEBSOCKET_SCRIPT_PATH = Path(__file__).resolve().parent / "../utils/WebsocketManager.js"
-AUX_UTILS_SCRIPT_PATH = Path(__file__).resolve().parent / "../utils/aux_utils.js"
-PARTICIPANTS_SCRIPT_PATH = Path(__file__).resolve().parent / "../utils/teams_participants.js"
-TRANSCRIPT_SCRIPT_PATH = Path(__file__).resolve().parent / "../utils/teams_transcript.js"
 
 
-class TeamsMeet:
-    def __init__(self,
-                 meeting_link,
-                 xvfb_display,
-                 ws_link,
-                 meeting_id,
-                 teams_mail=OUTLOOK,
-                 teams_pw=OUTLOOK_PWD):
-        self.participant_list = []
+class TeamsMeet(BotBase):
+    def __init__(self, meeting_link, xvfb_display, ws_link, meeting_id, teams_mail=OUTLOOK, teams_pw=OUTLOOK_PWD):
+        self.content = ""
         self.mail_address = teams_mail
         self.password = teams_pw
-        self.xvfb_display = xvfb_display
         self.botname = "BotAssistant"
-        self.meeting_id = meeting_id
         self.meeting_link = meeting_link
-        self.inference_id = uuid4()
         self.scraping_section_ids = {}
-        self.websocket = WebsocketConnection(ws_link)
-        self.timer = None
-        self.timer_running = False
+        self.last_send_transcription = datetime.now()
+        super().__init__(ws_link, xvfb_display, meeting_id)
 
-        # create chrome instance
-        opt = Options()
-        opt.add_argument('--disable-blink-features=AutomationControlled')
-        opt.add_argument('--start-maximized')
-        # opt.add_argument("--no-sandbox");
-        # opt.add_argument("--disable-dev-shm-usage");
-        opt.add_experimental_option("prefs", {
-            "profile.default_content_setting_values.media_stream_mic": 1,
-            "profile.default_content_setting_values.media_stream_camera": 1,
-            "profile.default_content_setting_values.geolocation": 0,
-            "profile.default_content_setting_values.notifications": 1
-        })
-        self.driver = webdriver.Chrome(options=opt)
+    def pin_participant(self, participant_name):
+        try:
+            attendeesParent = self.driver.find_element(By.XPATH, "//*[@aria-label='Participants']")
+            attendeesContainers = attendeesParent.find_elements(By.XPATH,
+                                                                ".//li[@role='presentation' and @data-cid='roster-participant']")
 
-    def start_timer(self, interval, func):
-        # Cancel any existing timer before starting a new one
-        if self.timer_running:
-            self.cancel_timer()
+            unpin_buttons = self.driver.find_elements(By.XPATH,
+                                                      '//button[@data-track-action-outcome="unpinParticipant"]')
+            for button in unpin_buttons:
+                button.click()  # unpinning all pinned
+                print("unpinning...")
+            print("all unpinned")
 
-        print("Starting timer...")
-        self.timer = threading.Timer(interval, func)
-        self.timer.start()
-        self.timer_running = True
-
-    def cancel_timer(self):
-        if self.timer is not None:
-            print("Cancelling timer...")
-            self.timer.cancel()
-            self.timer_running = False
-
-    def is_timer_running(self):
-        return self.timer_running
-
-    async def loop(self):
-        message = await self.websocket.conn.recv()
-        msg: dict = json.loads(message)
-        print(msg)
-        event = msg["event"]
-
-        if event == "select-subject":
-            print("need to call pin participant")
-            self.pin_participant(msg['data'])
-            print("finished pin participant func")
-        return 0
-
-    def pin_participant(self, paritipant_name):
-        pass
+            print('should pin ' + participant_name)
+            for attendee in attendeesContainers:
+                name = attendee.find_element(By.XPATH, './/span[contains(@id,"roster-avatar-img")]').text
+                print("attendee name " + name)
+                if name == participant_name:
+                    pinned = attendee.find_elements(By.XPATH, './/svg[@data-cid="roster-participant-pinned"]')
+                    print("is attendee pinned?")
+                    print(pinned == True)
+                    if not pinned:
+                        attendee.click()
+                        print("clicked on attendee " + name)
+                        print("not pinned. should pin")
+                        attendee.find_element(By.XPATH, ".//button[@data-cid='ts-participant-action-button']").click()
+                        self.driver.find_element(By.XPATH, "//span[text()='Pin for me']").click()
+        except:  # stale element may occur
+            pass
 
     def get_latest_transcriptions(self):
-        pass
+        try:
+            transcription_parent = self.driver.find_element(By.XPATH, '//div[@data-tid="closed-captions-renderer"]')
+            transcription_elements = transcription_parent.find_elements(By.XPATH,
+                                                                        './/li[contains(@class,"ui-chat__item")]')
+            if len(transcription_elements) > 2:
+                latest_complete_transcription = transcription_elements[-2]
+                authorSpan = latest_complete_transcription.find_element(By.XPATH,
+                                                                        ".//span[contains(@class,'ui-chat__message__author')]")
+                authorName = authorSpan.text if authorSpan is not None else ""
+
+                contentSpan = latest_complete_transcription.find_element(By.XPATH,
+                                                                         './/span[@data-tid="closed-caption-text"]')
+                content = contentSpan.text if contentSpan is not None else ""
+                if self.content != content:
+                    self.websocket.send_transcription(
+                        authorName,
+                        content,
+                        self.last_send_transcription,
+                        datetime.now()
+                    )
+                    self.last_send_transcription = datetime.now()
+                    self.content = content
+        except Exception as e:  # again, weird exceptions occur
+            raise e
 
     def get_participants(self):
-        attendeesParent = self.driver.find_element(By.XPATH, "//*[@aria-label='Participants']")
-        attendeesContainers = attendeesParent.find_elements(By.XPATH,
-                                                            ".//li[@role='presentation' and @data-cid='roster-participant']")
-        participants = []
-        for attendees in attendeesContainers:
-            participants.append(attendees.find_element(".//span[contains(@id,'roster-avatar-img')]").text
+        try:
+            attendeesParent = self.driver.find_element(By.XPATH, "//*[@aria-label='Participants']")
+            attendeesContainers = attendeesParent.find_elements(By.XPATH,
+                                                                ".//li[@role='presentation' and @data-cid='roster-participant']")
+            new_list = []
+            for attendees in attendeesContainers:
+                new_list.append(attendees.find_element(By.XPATH, ".//span[contains(@id,'roster-avatar-img')]").text
                                 )
 
-        self.websocket.send_participants(participants)
+            if len(self.participant_list) < 3:
+                if not self.is_timer_running():
+                    self.start_timer(30, self.exit_func)
+            elif self.is_timer_running():
+                self.cancel_timer()
+            if self.participant_list != new_list:
+                print(new_list)
+                self.websocket.send_participants(new_list)
+
+            self.participant_list = new_list
+        except:  # may send stale element errors
+            pass
 
     def tlogin(self):
         """
@@ -154,30 +151,11 @@ class TeamsMeet:
         self.driver.maximize_window()
         url = self.driver.current_url
 
-        if "meetup-join" not in url:
-            # There are 2 formats of urls. One has an iframe. Other doesn't
-
-            # Get the iframe with id containing "experience-container"
-            experience_container_iframe = self.driver.find_element(By.XPATH,
-                                                                   '//iframe[contains(@id, "experience-container")]')
-
-            # Switch to the iframe
-            self.driver.switch_to.frame(experience_container_iframe)
-
         if "DEV" in environ:
-            pass
-            # Headless instances don't have mic and camera anyway. So don't need to worry about this
-            # self.driver.find_element(By.XPATH,'//div[@title="Microphone"]/div').click()
-            # cam = self.driver.find_element(By.XPATH,'//div[@title="Camera"]/div')
-            # sleep(5) # wait for camera to be available
+            self.driver.find_element(By.XPATH, '//div[@title="Microphone"]/div').click()
+            # cam = self.driver.find_element(By.XPATH, '//div[@title="Camera"]/div') # camera is off by default
+            sleep(5)  # wait for camera to be available
             # cam.click()
-
-        # Get the button with id "prejoin-join-button"
-        input_element = self.driver.find_element(By.XPATH, '//input[@type="text"][@placeholder="Type your name"]')
-
-        # Click the input element
-        input_element.click()
-        input_element.send_keys(BOT_NAME)
 
         self.driver.implicitly_wait(10)
         self.driver.find_element(By.ID, 'prejoin-join-button').click()
@@ -211,6 +189,9 @@ class TeamsMeet:
             actions.key_down(Keys.ALT).key_down(Keys.SHIFT).key_down("c").key_up(Keys.SHIFT).key_up(Keys.ALT).key_up(
                 "c").perform()
 
+            self.driver.implicitly_wait(10)
+            self.driver.find_element(By.XPATH, "//div[@data-tid='closed-captions-renderer']")  # wait for cc to open
+
             video_element = self.driver.find_element(By.XPATH,
                                                      "//*[@data-tid='SpeakerStage-wrapper']//*[@data-cid='calling-participant-stream']")
 
@@ -232,25 +213,25 @@ class TeamsMeet:
                 print("send analysing")
                 # sleep(duration)
 
-                subprocess.Popen([
-                    # "xvfb-run --listen-tcp --server-num=44 --auth-file=/tmp/xvfb.auth -s "-ac -screen 0 1920x1080x24" /
-                    "python",
-                    str(GSTREAMER_PATH.resolve()),
-                    "--display_num",
-                    f":{self.xvfb_display}",
-                    "--startx",
-                    str(int(x)),
-                    "--starty",
-                    str(int(y)),
-                    "--endx",
-                    str(int(x + width)),
-                    "--endy",
-                    str((y + height))
-                ])
+                # subprocess.Popen([
+                #     # "xvfb-run --listen-tcp --server-num=44 --auth-file=/tmp/xvfb.auth -s "-ac -screen 0 1920x1080x24" /
+                #     "python",
+                #     str(GSTREAMER_PATH.resolve()),
+                #     "--display_num",
+                #     f":{self.xvfb_display}",
+                #     "--startx",
+                #     str(int(x)),
+                #     "--starty",
+                #     str(int(y)),
+                #     "--endx",
+                #     str(int(x + width)),
+                #     "--endy",
+                #     str((y + height))
+                # ])
                 print("opened gstreamer process")
         except Exception as e:
-            print(e)
             print("Unexpected error")
+            raise (e)
 
 
 if __name__ == "__main__":
@@ -261,22 +242,25 @@ if __name__ == "__main__":
                           args[2],  # ws_link 
                           args[3],  # meeting_id
                           )
-        # subprocess.Popen([
-        #     # "xvfb-run --listen-tcp --server-num=44 --auth-file=/tmp/xvfb.auth -s "-ac -screen 0 1920x1080x24" /
-        #     "python",
-        #     str(GSTREAMER_PATH.resolve()),
-        #     "--display_num",
-        #     f":{args[1]}",
-        #     "--startx",
-        #     "0",
-        #     "--starty",
-        #     "0",
-        #     "--endx",
-        #     "1920",
-        #     "--endy",
-        #     "1080",
-        # ])
-        asyncio.get_event_loop().run_until_complete(teams.websocket.connect())
+        subprocess.Popen([
+            # "xvfb-run --listen-tcp --server-num=44 --auth-file=/tmp/xvfb.auth -s "-ac -screen 0 1920x1080x24" /
+            "python",
+            str(GSTREAMER_PATH.resolve()),
+            "--display_num",
+            f":{args[1]}",
+            "--startx",
+            "0",
+            "--starty",
+            "0",
+            "--endx",
+            "1920",
+            "--endy",
+            "1080",
+        ])
+
+        thread = threading.Thread(target=teams.setup_ws, daemon=True)
+        thread.start()
+        teams.tlogin()
         teams.join_meeting()
         teams.record_and_stream()
         while True:

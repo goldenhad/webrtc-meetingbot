@@ -32,7 +32,7 @@ def run_gmeet( websocket_url, meeting_link):
     while display_num in used_display_nums:
         display_num = random.randint(2,100)
 
-    script = f'#!/bin/sh \nxvfb-run --listen-tcp --server-num={display_num} --auth-file=/tmp/xvfb.auth -s "-ac -screen 0 1920x1080x24" python -m src.meeting.googlebot {meeting_link} {display_num} {websocket_url} testid'
+    script = f'#!/bin/sh \nPULSE_SINK=chrome_sink xvfb-run --listen-tcp --server-num={display_num} --auth-file=/tmp/xvfb.auth -s "-ac -screen 0 1920x1080x24" python -m src.meeting.googlebot {meeting_link} {display_num} {websocket_url} testid'
 
     # script = f'#!/bin/sh \n python -m src.meeting.zoombot {meeting_link} {0} {websocket_url} testid'
     with open("google_launcher.sh",'w') as google_launcher:
@@ -49,7 +49,7 @@ def run_zoom(websocket_url, meeting_link):
     while display_num in used_display_nums:
         display_num = random.randint(2,100)
 
-    script = f'#!/bin/sh \nxvfb-run --listen-tcp --server-num={display_num} --auth-file=/tmp/xvfb.auth -s "-ac -screen 0 1920x1080x24" python -m src.meeting.zoombot {meeting_link} {display_num} {websocket_url} testid'
+    script = f'#!/bin/sh \nPULSE_SINK=chrome_sink xvfb-run --listen-tcp --server-num={display_num} --auth-file=/tmp/xvfb.auth -s "-ac -screen 0 1920x1080x24" python -m src.meeting.zoombot {meeting_link} {display_num} {websocket_url} testid'
     # script = f'#!/bin/sh \n python -m src.meeting.zoombot {meeting_link} {0} {websocket_url} testid'
     with open("zoom_launcher.sh",'w') as zoom_launcher:
         zoom_launcher.write(script)
@@ -69,7 +69,7 @@ def run_teams( websocket_url, meeting_link):
     while display_num in used_display_nums:
         display_num = random.randint(2,100)
 
-    script = f'#!/bin/sh \nxvfb-run --listen-tcp --server-num={display_num} --auth-file=/tmp/xvfb.auth -s "-ac -screen 0 1920x1080x24" python -m src.meeting.teamsbot {meeting_link} {display_num} {websocket_url} testid'
+    script = f'#!/bin/sh \nPULSE_SINK=chrome_sink xvfb-run --listen-tcp --server-num={display_num} --auth-file=/tmp/xvfb.auth -s "-ac -screen 0 1920x1080x24" python -m src.meeting.teamsbot {meeting_link} {display_num} {websocket_url} testid'
 
     # script = f'#!/bin/sh \n python -m src.meeting.zoombot {meeting_link} {0} {websocket_url} testid'
     with open("teams_launcher.sh",'w') as teams_launcher:

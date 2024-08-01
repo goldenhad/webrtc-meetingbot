@@ -60,14 +60,13 @@ wss.on('connection', (ws) => {
         console.log("analysing event recieved")
         console.log(data.data)
         break;
-      case 'participant':
+      case 'participants':
         console.log("participant event recieved")
         console.log(data.data)
         break;
       case 'subject':
         console.log("subject event recieved")
         console.log(data.data)
-        break;
         break;
       case 'processed':
         console.log("processed event recieved")

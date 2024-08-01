@@ -1,2 +1,2 @@
 #!/bin/sh 
-xvfb-run --listen-tcp --server-num=32 --auth-file=/tmp/xvfb.auth -s "-ac -screen 0 1920x1080x24" python -m src.meeting.googlebot https://meet.google.com/dks-shkm-yrr 32 ws://localhost:7000 testid
+xvfb-run --listen-tcp --server-num=60 --auth-file=/tmp/xvfb.auth -s "-ac -screen 0 1920x1080x24" python -m src.meeting.googlebot https://meet.google.com/nis-cvuh-hbw 60 ws://localhost:7000 testid
