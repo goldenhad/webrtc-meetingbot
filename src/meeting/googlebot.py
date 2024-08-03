@@ -138,18 +138,18 @@ class GoogleMeet(BotBase):
 
         if "DEV" in environ:
             # Turn off Microphone
-            self.driver.find_element(By.CSS_SELECTOR, 'div[jscontroller="t2mBxb"][data-anchor-id="hw0c9"]').click()
+            self.driver.find_element(By.XPATH,'//*[@aria-label="Turn off microphone"]').click()
             self.driver.implicitly_wait(3000)
             print("Turn off mic activity: Done")
 
             # Turn off Camera
             sleep(1)
-            self.driver.find_element(By.CSS_SELECTOR, 'div[jscontroller="bwqwSd"][data-anchor-id="psRWwc"]').click()
+            self.driver.find_element(By.XPATH,'//*[@aria-label="Turn off camera"]').click()
             self.driver.implicitly_wait(3000)
             print("Turn off camera activity: Done")
 
         self.driver.implicitly_wait(2000)
-        self.driver.find_element(By.CSS_SELECTOR, 'button[jsname="Qx7uuf"]').click()
+        self.driver.find_element(By.XPATH, '//*[text()="Ask to join" or text()="Join now"]').click()
         print("Ask to join activity: Done")
 
     def record_and_stream(self, duration):
