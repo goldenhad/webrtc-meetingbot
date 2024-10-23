@@ -3,6 +3,11 @@ venv
 __pycache__
 .vscode
 .env
+
+
+**src/requirements.txt
+**/Dockerfile
+**/entrypoint.sh
 # Created by https://www.toptal.com/developers/gitignore/api/python,node
 # Edit at https://www.toptal.com/developers/gitignore?templates=python,node
 
