@@ -1,83 +1,99 @@
-from datetime import datetime
-from typing import Callable, List
-from pydantic import UUID4
-from websocket import WebSocket
 import json
+from datetime import datetime
+from typing import List
+
+import socketio
+from pydantic import UUID4
+
 
 class WebsocketConnection:
-    def __init__(self,ws_link: str) -> None:
+    def __init__(self, ws_link: str, meeting_id) -> None:
         self.ws_link: str = ws_link
-        self.ws: WebSocket | None = None
+        self.sio = socketio.Client()
         self.analysing_sent: bool = False
         self.room_joined: bool = False
         self.connected: bool = False
+        self.meeting_id = meeting_id
 
+        self.sio.on('connect', self.on_connect)
+        self.sio.on('disconnect', self.on_disconnect)
+        self.sio.on('error', self.on_error)
 
-    def connect(self, on_message: Callable):
-        if self.ws != None and not self.connected:
-            self.ws.connect(self.ws_link, on_message = on_message)
+    def connect(self):
+        self.sio.connect(self.ws_link)
 
-    def __ws_send(self,payload: dict):
-        if self.ws != None:
-            self.ws.send(json.dumps(payload))
+    def on_connect(self):
+        self.sio.emit('join-room-for-new-bot', self.meeting_id)
+        print("Connected to the server from websockemanager")
+        self.connected = True
+
+    def on_disconnect(self):
+        print("Disconnected from the server")
+        self.connected = False
+
+    def on_error(self, error):
+        print(f"An error occurred: {error}")
+
+    def __ws_send(self, payload: dict, event: str):
+        if self.connected:
+            self.sio.emit(event, payload['data'])
 
     def join_room(self, room_id: str, start_time: datetime, inference_id: UUID4):
         payload = {
-            "event": "join-room",
-            "data": {"roomId":room_id,"startTime": start_time, "inferenceId": inference_id}
+            "data": room_id
         }
         if not self.room_joined:
-            self.__ws_send(payload)
+            self.__ws_send(payload, 'join-room')
+            self.room_joined = True
 
     def send_transcription(self, name: str, content: str, start: datetime, end: datetime):
         payload = {
-            "event": "transcription",
-            "data": {"name":name,"content": content, "timeStamps": {
-                "start": start,
-                "end": end
-            }}
+            "data": {
+                "name": name,
+                "content": content,
+                "timeStamps": {
+                    "start": start.strftime("%m/%d/%Y %H:%M:%S"),
+                    "end": end.strftime("%m/%d/%Y %H:%M:%S")
+                }
+            }
         }
-        self.__ws_send(payload)
+        self.__ws_send(payload, 'transcription')
 
     def bot_error(self):
         payload = {
-            "event": "extension-bot-error"
+            "data": {}
         }
-        self.__ws_send(payload)
-
+        self.__ws_send(payload, 'extension-bot-error')
 
     def send_analysing(self, meeting_id: str, inference_id: UUID4, rtmp_url: str = ""):
         payload = {
-            "event": "analysing",
             "data": {
                 "meetingId": meeting_id,
-                "inferenceId": inference_id,
+                "inferenceId": str(inference_id),
                 "rtmpUrl": rtmp_url,
             }
         }
         if not self.analysing_sent:
-            self.__ws_send(payload)
+            self.__ws_send(payload, 'analysing')
             self.analysing_sent = True
 
     def send_participants(self, participants: List[str]):
         payload = {
-            "event": "participants",
             "data": participants
         }
-        self.__ws_send(payload)
+        print("Sending participants")
+        self.__ws_send(payload, 'participants')
 
     def send_subject(self, subject: str):
         payload = {
-            "event": "subject",
             "data": subject
         }
-        self.__ws_send(payload)
+        self.__ws_send(payload, 'subject')
 
-    def close(self):
-        if self.ws != None:
-            self.ws.close()
-            self.connected = False
+    def send_processed(self):
+        payload = {
+            "data": self.meeting_id
+        }
 
-             
+        self.__ws_send(payload, 'processed')
 
-        
